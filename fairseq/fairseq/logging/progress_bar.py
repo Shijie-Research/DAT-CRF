@@ -413,6 +413,7 @@ class TensorboardProgressBarWrapper(BaseProgressBar):
     def __init__(self, wrapped_bar, tensorboard_logdir):
         self.wrapped_bar = wrapped_bar
         self.tensorboard_logdir = tensorboard_logdir
+        self._config = None
 
         if SummaryWriter is None:
             logger.warning("tensorboard not found, please install with: pip install tensorboard")
@@ -424,6 +425,8 @@ class TensorboardProgressBarWrapper(BaseProgressBar):
         if key not in _writers:
             _writers[key] = SummaryWriter(os.path.join(self.tensorboard_logdir, key))
             _writers[key].add_text("sys.argv", " ".join(sys.argv))
+            if self._config is not None:
+                _writers[key].add_text("hparams", json.dumps(self._config))
         return _writers[key]
 
     def __iter__(self):
@@ -441,7 +444,7 @@ class TensorboardProgressBarWrapper(BaseProgressBar):
 
     def update_config(self, config):
         """Log latest configuration."""
-        # TODO add hparams to Tensorboard
+        self._config = config
         self.wrapped_bar.update_config(config)
 
     def _log_to_tensorboard(self, stats, tag=None, step=None):
