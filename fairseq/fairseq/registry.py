@@ -89,6 +89,7 @@ def setup_registry(registry_name: str, base_class=None, default=None, required=F
                 cs.store(name=name, group=registry_name, node=node, provider="fairseq")
 
             REGISTRY[name] = cls
+            REGISTRY_CLASS_NAMES.add(cls.__name__)
 
             return cls
 
