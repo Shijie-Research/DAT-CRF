@@ -88,7 +88,7 @@ def gen_parser_from_dataclass(
         if isinstance(inter_type, type) and issubclass(inter_type, Enum):
             field_choices = [t.value for t in list(inter_type)]
         else:
-            field_choices = None
+            field_choices = dataclass_instance._get_choices(k)
 
         field_help = dataclass_instance._get_help(k)
         field_const = dataclass_instance._get_argparse_const(k)
