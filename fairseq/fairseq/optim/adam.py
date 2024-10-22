@@ -194,22 +194,31 @@ class Adam(torch.optim.Optimizer):
                 # Decay the first and second moment running average coefficient
                 exp_avg.mul_(beta1).add_(grad, alpha=1 - beta1)
                 exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
+
+                bias_correction1 = 1 - beta1 ** state["step"]
+                bias_correction2 = 1 - beta2 ** state["step"]
+
+                step_size = group["lr"] / bias_correction1
+                step_size_neg = -step_size
+
+                bias_correction2_sqrt = math.sqrt(bias_correction2)
+
                 if amsgrad:
                     # Maintains the maximum of all 2nd moment running avg. till now
                     torch.max(max_exp_avg_sq, exp_avg_sq, out=max_exp_avg_sq)
                     # Use the max. for normalizing running avg. of gradient
-                    denom = max_exp_avg_sq.sqrt().add_(group["eps"])
+                    denom = (max_exp_avg_sq.sqrt() / (bias_correction2_sqrt * step_size_neg)).add_(
+                        group["eps"] / step_size_neg,
+                    )
                 else:
-                    denom = exp_avg_sq.sqrt().add_(group["eps"])
+                    denom = (exp_avg_sq.sqrt() / (bias_correction2_sqrt * step_size_neg)).add_(
+                        group["eps"] / step_size_neg,
+                    )
 
-                bias_correction1 = 1 - beta1 ** state["step"]
-                bias_correction2 = 1 - beta2 ** state["step"]
-                step_size = group["lr"] * math.sqrt(bias_correction2) / bias_correction1
+                p_data_fp32.addcdiv_(exp_avg, denom)
 
                 if group["weight_decay"] != 0:
                     p_data_fp32.add_(p_data_fp32, alpha=-group["weight_decay"] * group["lr"])
-
-                p_data_fp32.addcdiv_(exp_avg, denom, value=-step_size)
 
                 if p.data.dtype in {torch.float16, torch.bfloat16}:
                     p.data.copy_(p_data_fp32)
