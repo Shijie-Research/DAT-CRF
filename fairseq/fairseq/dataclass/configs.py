@@ -115,6 +115,10 @@ class CommonConfig(FairseqDataclass):
         default=None,
         metadata={"help": "Weights and Biases project name to use for logging"},
     )
+    wandb_run_id: Optional[str] = field(
+        default=None,
+        metadata={"help": "Weights and Biases run id to use for resuming logging"},
+    )
     azureml_logging: Optional[bool] = field(default=False, metadata={"help": "Log scalars to AzureML context"})
     seed: int = field(default=1, metadata={"help": "pseudo random number generator seed"})
     cpu: bool = field(default=False, metadata={"help": "use CPU instead of CUDA"})

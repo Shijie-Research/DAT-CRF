@@ -271,6 +271,7 @@ def train(cfg: DictConfig, trainer: Trainer, task: tasks.FairseqTask, epoch_itr)
         default_log_format=("tqdm" if not cfg.common.no_progress_bar else "simple"),
         wandb_project=(cfg.common.wandb_project if distributed_utils.is_master(cfg.distributed_training) else None),
         wandb_run_name=os.environ.get("WANDB_NAME", os.path.basename(cfg.checkpoint.save_dir)),
+        wandb_run_id=cfg.common.wandb_run_id,
         azureml_logging=(
             cfg.common.azureml_logging if distributed_utils.is_master(cfg.distributed_training) else False
         ),
