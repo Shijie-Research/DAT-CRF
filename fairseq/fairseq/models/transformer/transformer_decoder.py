@@ -214,31 +214,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
     def extract_features(
         self,
         prev_output_tokens,
-        encoder_out: Optional[Dict[str, List[Tensor]]],
-        incremental_state: Optional[Dict[str, Dict[str, Optional[Tensor]]]] = None,
-        full_context_alignment: bool = False,
-        alignment_layer: Optional[int] = None,
-        alignment_heads: Optional[int] = None,
-    ):
-        return self.extract_features_scriptable(
-            prev_output_tokens,
-            encoder_out,
-            incremental_state,
-            full_context_alignment,
-            alignment_layer,
-            alignment_heads,
-        )
-
-    """
-    A scriptable subclass of this class has an extract_features method and calls
-    super().extract_features, but super() is not supported in torchscript. A copy of
-    this function is made to be used in the subclass instead.
-    """
-
-    def extract_features_scriptable(
-        self,
-        prev_output_tokens,
-        encoder_out: Optional[Dict[str, List[Tensor]]],
+        encoder_out: Optional[Dict[str, List[Tensor]]] = None,
         incremental_state: Optional[Dict[str, Dict[str, Optional[Tensor]]]] = None,
         full_context_alignment: bool = False,
         alignment_layer: Optional[int] = None,
