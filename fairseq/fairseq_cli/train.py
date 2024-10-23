@@ -59,7 +59,8 @@ def main(cfg: FairseqConfig) -> None:
 
     if cfg.common.log_file is not None:
         handler = logging.FileHandler(filename=cfg.common.log_file)
-        logger.addHandler(handler)
+        if not any(h.stream.name == handler.stream.name for h in logger.handlers):
+            logger.addHandler(handler)
 
     np.random.seed(cfg.common.seed)
     utils.set_torch_seed(cfg.common.seed)

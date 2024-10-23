@@ -44,7 +44,8 @@ def progress_bar(
         log_format = default_log_format
     if log_file is not None:
         handler = logging.FileHandler(filename=log_file)
-        logger.addHandler(handler)
+        if not any(h.stream.name == handler.stream.name for h in logger.handlers):
+            logger.addHandler(handler)
 
     if log_format == "tqdm" and not sys.stderr.isatty():
         log_format = "simple"
