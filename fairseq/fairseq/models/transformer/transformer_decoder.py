@@ -205,6 +205,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             full_context_alignment=full_context_alignment,
             alignment_layer=alignment_layer,
             alignment_heads=alignment_heads,
+            return_all_hiddens=return_all_hiddens,
         )
 
         if not features_only:
@@ -219,6 +220,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         full_context_alignment: bool = False,
         alignment_layer: Optional[int] = None,
         alignment_heads: Optional[int] = None,
+        return_all_hiddens: bool = False,
     ):
         """
         Similar to *forward* but only return features.
@@ -288,7 +290,9 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
 
         # decoder layers
         attn: Optional[Tensor] = None
-        inner_states: List[Optional[Tensor]] = [x]
+        inner_states: List[Optional[Tensor]] = []
+        if return_all_hiddens:
+            inner_states.append(x)
         for idx, layer in enumerate(self.layers):
             if incremental_state is None and not full_context_alignment:
                 self_attn_mask = self.buffered_future_mask(x)
@@ -305,7 +309,8 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                 need_attn=bool((idx == alignment_layer)),
                 need_head_weights=bool((idx == alignment_layer)),
             )
-            inner_states.append(x)
+            if return_all_hiddens:
+                inner_states.append(x)
             if layer_attn is not None and idx == alignment_layer:
                 attn = layer_attn.float().to(x)
 
