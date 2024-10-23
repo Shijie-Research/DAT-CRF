@@ -59,4 +59,4 @@ def add_defaults(cfg: DictConfig) -> None:
                 dc = REGISTRIES[k]["dataclass_registry"].get(name)
 
             if dc is not None:
-                cfg[k] = merge_with_parent(dc, field_cfg)
+                cfg[k] = merge_with_parent(dc(), field_cfg)
