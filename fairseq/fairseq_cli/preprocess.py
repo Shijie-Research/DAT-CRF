@@ -354,9 +354,9 @@ def main(args):
         _align_files(args, src_dict=src_dict, tgt_dict=tgt_dict)
 
 
-def cli_main():
+def cli_main(input_args=None):
     parser = options.get_preprocessing_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(input_args)
     main(args)
 
 

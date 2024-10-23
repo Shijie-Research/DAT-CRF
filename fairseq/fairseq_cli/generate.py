@@ -364,7 +364,7 @@ def _main(cfg: DictConfig, output_file):
     return scorer
 
 
-def cli_main():
+def cli_main(input_args=None):
     parser = options.get_generation_parser()
     # TODO: replace this workaround with refactoring of `AudioPretraining`
     parser.add_argument(
@@ -374,7 +374,7 @@ def cli_main():
         default="wav2vec2",
         help="Model architecture. For constructing tasks that rely on model args (e.g. `AudioPretraining`)",
     )
-    args = options.parse_args_and_arch(parser)
+    args = options.parse_args_and_arch(parser, input_args=input_args)
     main(args)
 
 

@@ -480,9 +480,12 @@ def get_valid_stats(
     return stats
 
 
-def cli_main(modify_parser: Optional[Callable[[argparse.ArgumentParser], None]] = None) -> None:
+def cli_main(
+    input_args: Optional[List[str]] = None,
+    modify_parser: Optional[Callable[[argparse.ArgumentParser], None]] = None,
+) -> None:
     parser = options.get_training_parser()
-    args = options.parse_args_and_arch(parser, modify_parser=modify_parser)
+    args = options.parse_args_and_arch(parser, modify_parser=modify_parser, input_args=input_args)
 
     cfg = convert_namespace_to_omegaconf(args)
 
