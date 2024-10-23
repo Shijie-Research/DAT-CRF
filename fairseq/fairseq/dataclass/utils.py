@@ -267,11 +267,11 @@ def _override_attr(sub_node: str, data_class: Type[FairseqDataclass], args: Name
 
 def migrate_registry(name, value, registry, args, overrides, deletes, use_name_as_val=False):
     if value in registry:
-        overrides.append("{}={}".format(name, value))
+        overrides.append("+{}={}".format(name, value))
         overrides.append("{}._name={}".format(name, value))
         overrides.extend(_override_attr(name, registry[value], args))
     elif use_name_as_val and value is not None:
-        overrides.append("{}={}".format(name, value))
+        overrides.append("+{}={}".format(name, value))
     else:
         deletes.append(name)
 
@@ -364,9 +364,9 @@ def convert_namespace_to_omegaconf(args: Namespace) -> DictConfig:
 
     GlobalHydra.instance().clear()
 
-    with initialize(config_path=config_path):
+    with initialize(config_path=config_path, version_base="1.1"):
         try:
-            composed_cfg = compose("config", overrides=overrides, strict=False)
+            composed_cfg = compose("config", overrides=overrides)
         except:
             logger.error("Error when composing. Overrides: " + str(overrides))
             raise
