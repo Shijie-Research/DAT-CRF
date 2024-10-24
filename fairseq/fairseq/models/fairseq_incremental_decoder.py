@@ -90,7 +90,7 @@ class FairseqIncrementalDecoder(FairseqDecoder):
         calling :func:`reorder_incremental_state` directly.
         """
         for module in self.modules():
-            if hasattr(module, "reorder_incremental_state"):
+            if hasattr(module, "reorder_incremental_state") and module != self:
                 result = module.reorder_incremental_state(incremental_state, new_order)
                 if result is not None:
                     incremental_state = result
