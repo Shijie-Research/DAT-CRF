@@ -501,8 +501,8 @@ class MultiheadAttention(FairseqIncrementalDecoder):
 
         if self.self_attention:
             q = self.q_proj(query)
-            k = self.k_proj(query)
-            v = self.v_proj(query)
+            k = self.k_proj(query if key is None else key)
+            v = self.v_proj(query if value is None else value)
         elif self.encoder_decoder_attention:
             # encoder-decoder attention
             q = self.q_proj(query)
@@ -516,7 +516,7 @@ class MultiheadAttention(FairseqIncrementalDecoder):
                     if key_padding_mask is not None:
                         key_padding_mask = key_padding_mask.view(-1, self.beam_size, key_padding_mask.size(1))[:, 0, :]
                 k = self.k_proj(key)
-                v = self.v_proj(key)
+                v = self.v_proj(value)
 
         else:
             assert key is not None and value is not None
