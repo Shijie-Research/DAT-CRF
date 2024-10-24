@@ -40,6 +40,8 @@ class BaseFairseqModel(nn.Module):
     def __init__(self):
         super().__init__()
         self._is_generation_fast = False
+        self._num_updates = None
+        self._epoch = None
 
     @classmethod
     def add_args(cls, parser):
@@ -152,14 +154,22 @@ class BaseFairseqModel(nn.Module):
 
     def set_num_updates(self, num_updates):
         """State from trainer to pass along to model at every update."""
+        self._num_updates = num_updates
         for m in self.modules():
             if hasattr(m, "set_num_updates") and m != self:
                 m.set_num_updates(num_updates)
 
+    def get_num_updates(self):
+        return self._num_updates
+
     def set_epoch(self, epoch):
+        self._epoch = epoch
         for m in self.modules():
             if hasattr(m, "set_epoch") and m != self:
                 m.set_epoch(epoch)
+
+    def get_epoch(self):
+        return self._epoch
 
     def prepare_for_inference_(self, cfg: DictConfig):
         """Prepare model for inference."""
