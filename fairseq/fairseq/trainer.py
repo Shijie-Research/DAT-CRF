@@ -434,6 +434,7 @@ class Trainer(object):
         reset_lr_scheduler=False,
         optimizer_overrides=None,
         reset_meters=False,
+        strict=True,
     ):
         """
         Load all training state from a checkpoint file.
@@ -539,7 +540,19 @@ class Trainer(object):
                         layer._prune_fc_layer(remove_index=remove_index)
                     logger.info(self.model)
 
-                self.model.load_state_dict(state["model"], strict=True, model_cfg=self.cfg.model)
+                _incompatible_keys = self.model.load_state_dict(state["model"], strict=strict, model_cfg=self.cfg.model)
+                if len(_incompatible_keys.missing_keys) > 0:
+                    logger.warning(
+                        "Found missing key(s) in state_dict: {}. ".format(
+                            ", ".join('"{}"'.format(k) for k in _incompatible_keys.missing_keys),
+                        ),
+                    )
+                if len(_incompatible_keys.unexpected_keys) > 0:
+                    logger.warning(
+                        "Found unexpected key(s) in state_dict: {}. ".format(
+                            ", ".join('"{}"'.format(k) for k in _incompatible_keys.unexpected_keys),
+                        ),
+                    )
                 # save memory for later steps
                 del state["model"]
                 if utils.has_parameters(self.get_criterion()):
