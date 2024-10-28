@@ -70,10 +70,10 @@ def save_checkpoint(cfg: CheckpointConfig, trainer, epoch_itr, val_loss):
     suffix = trainer.checkpoint_suffix
     checkpoint_conds = collections.OrderedDict()
     checkpoint_conds["checkpoint{}{}.pt".format(epoch, suffix)] = (
-        end_of_epoch and not cfg.no_epoch_checkpoints and epoch % cfg.save_interval == 0
+        end_of_epoch and not cfg.no_epoch_checkpoints and cfg.save_interval > 0 and epoch % cfg.save_interval == 0
     )
     checkpoint_conds["checkpoint_{}_{}{}.pt".format(epoch, updates, suffix)] = (
-        not end_of_epoch and cfg.save_interval_updates > 0 and updates % cfg.save_interval_updates == 0
+        cfg.save_interval_updates > 0 and updates % cfg.save_interval_updates == 0
     )
     checkpoint_conds["checkpoint_best{}.pt".format(suffix)] = val_loss is not None and (
         not hasattr(save_checkpoint, "best") or is_better(val_loss, save_checkpoint.best)
@@ -136,7 +136,7 @@ def save_checkpoint(cfg: CheckpointConfig, trainer, epoch_itr, val_loss):
             ),
         )
 
-    if not end_of_epoch and cfg.keep_interval_updates > 0 and trainer.should_save_checkpoint_on_current_rank:
+    if cfg.keep_interval_updates > 0 and trainer.should_save_checkpoint_on_current_rank:
         # remove old checkpoints; checkpoints are sorted in descending order
         if cfg.keep_interval_updates_pattern == -1:
             checkpoints = checkpoint_paths(cfg.save_dir, pattern=r"checkpoint_\d+_(\d+){}\.pt".format(suffix))
