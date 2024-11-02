@@ -93,8 +93,10 @@ class TransformerEncoderBase(FairseqEncoder):
         else:
             self.layer_norm = None
 
-    def build_encoder_layer(self, cfg):
-        layer = transformer_layer.TransformerEncoderLayerBase(cfg, return_fc=self.return_fc)
+    def build_encoder_layer(self, cfg, layer=None):
+        cfg = TransformerConfig.from_namespace(cfg)
+        if layer is None:
+            layer = transformer_layer.TransformerEncoderLayerBase(cfg, return_fc=self.return_fc)
         checkpoint = cfg.checkpoint_activations
         if checkpoint:
             offload_to_cpu = cfg.offload_activations
@@ -322,9 +324,4 @@ class TransformerEncoder(TransformerEncoderBase):
             dictionary,
             embed_tokens,
             return_fc=return_fc,
-        )
-
-    def build_encoder_layer(self, args):
-        return super().build_encoder_layer(
-            TransformerConfig.from_namespace(args),
         )

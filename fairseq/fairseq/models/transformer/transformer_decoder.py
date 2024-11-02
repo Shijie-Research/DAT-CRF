@@ -128,6 +128,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             self.build_output_projection(cfg, dictionary, embed_tokens)
 
     def build_output_projection(self, cfg, dictionary, embed_tokens):
+        cfg = TransformerConfig.from_namespace(cfg)
         if cfg.adaptive_softmax_cutoff is not None:
             self.adaptive_softmax = AdaptiveSoftmax(
                 len(dictionary),
@@ -155,8 +156,10 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                 BaseLayer(cfg),
             )
 
-    def build_decoder_layer(self, cfg, no_encoder_attn=False):
-        layer = transformer_layer.TransformerDecoderLayerBase(cfg, no_encoder_attn)
+    def build_decoder_layer(self, cfg, no_encoder_attn=False, layer=None):
+        cfg = TransformerConfig.from_namespace(cfg)
+        if layer is None:
+            layer = transformer_layer.TransformerDecoderLayerBase(cfg, no_encoder_attn)
         checkpoint = cfg.checkpoint_activations
         if checkpoint:
             offload_to_cpu = cfg.offload_activations
@@ -419,9 +422,3 @@ class TransformerDecoder(TransformerDecoderBase):
             no_encoder_attn=no_encoder_attn,
             output_projection=output_projection,
         )
-
-    def build_output_projection(self, args, dictionary, embed_tokens):
-        super().build_output_projection(TransformerConfig.from_namespace(args), dictionary, embed_tokens)
-
-    def build_decoder_layer(self, args, no_encoder_attn=False):
-        return super().build_decoder_layer(TransformerConfig.from_namespace(args), no_encoder_attn=no_encoder_attn)
