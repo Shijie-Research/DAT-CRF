@@ -27,8 +27,13 @@ def build_criterion(cfg: DictConfig, task, from_checkpoint=False):
     return build_criterion_(cfg, task, from_checkpoint=from_checkpoint)
 
 
-# automatically import any Python files in the criterions/ directory
-for file in sorted(os.listdir(os.path.dirname(__file__))):
-    if file.endswith(".py") and not file.startswith("_"):
-        file_name = file[: file.find(".py")]
-        importlib.import_module("fairseq.criterions." + file_name)
+def import_criterions(criterions_dir, namespace):
+    # automatically import any Python files in the criterions/ directory
+    for file in sorted(os.listdir(criterions_dir)):
+        if file.endswith(".py") and not file.startswith("_"):
+            file_name = file[: file.find(".py")]
+            importlib.import_module(namespace + "." + file_name)
+
+
+criterions_dir = os.path.dirname(__file__)
+import_criterions(criterions_dir, "fairseq.criterions")

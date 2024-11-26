@@ -472,6 +472,12 @@ def import_user_module(args):
                     from fairseq.models import import_models
 
                     import_models(models_path, f"{module_name}.models")
+
+                criterions_path = os.path.join(module_path, "criterions")
+                if os.path.exists(criterions_path):
+                    from fairseq.criterions import import_criterions
+
+                    import_criterions(criterions_path, f"{module_name}.criterions")
             elif module_path in sys.modules[module_name].__path__:
                 logger.info(f"--user-dir={module_path} has already been imported.")
             else:
