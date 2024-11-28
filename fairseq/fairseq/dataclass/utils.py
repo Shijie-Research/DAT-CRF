@@ -372,7 +372,10 @@ def convert_namespace_to_omegaconf(args: Namespace) -> DictConfig:
             raise
 
         for k in deletes:
-            composed_cfg[k] = None
+            try:
+                composed_cfg[k] = None
+            except:
+                pass
 
     cfg = OmegaConf.create(OmegaConf.to_container(composed_cfg, resolve=True, enum_to_str=True))
 
