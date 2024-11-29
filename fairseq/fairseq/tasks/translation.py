@@ -9,7 +9,7 @@ import logging
 import os
 from argparse import Namespace
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import List, Optional
 
 import numpy as np
 from omegaconf import II
@@ -227,6 +227,29 @@ class TranslationConfig(FairseqDataclass):
         metadata={"help": "print sample generations during validation"},
     )
 
+    filter_max_sizes: List[int] = field(
+        default_factory=lambda: [],
+        metadata={
+            "help": "List of maximum source and target sizes to filter out samples. "
+            "For instance, '200,400' will keep samples with 'source length <= 200 and target length <= 400'.",
+        },
+    )
+    filter_min_sizes: List[int] = field(
+        default_factory=lambda: [],
+        metadata={
+            "help": "List of minimum source and target sizes to filter out samples. "
+            "For instance, '200,400' will keep samples with 'source length >= 200 and target length >= 400'.",
+        },
+    )
+    filter_ratio: List[float] = field(
+        default_factory=lambda: [],
+        metadata={
+            "help": "Filters out samples that do not satisfy the specified len(target)/len(source) ratio constraints. "
+            "For instance, if the ratio is set to `2`, samples where the len(target)/len(source) <1/2 or >2 will be removed. "
+            "If the ratio is specified as `0.5,2`, samples where the len(target)/len(source) <0.5 or >2 will be removed.",
+        },
+    )
+
 
 @register_task("translation", dataclass=TranslationConfig)
 class TranslationTask(FairseqTask):
@@ -402,7 +425,13 @@ class TranslationTask(FairseqTask):
 
     def max_positions(self):
         """Return the max sentence length allowed by the task."""
-        return (self.cfg.max_source_positions, self.cfg.max_target_positions)
+        max_source_positions = self.cfg.max_source_positions
+        max_target_positions = self.cfg.max_target_positions
+        if len(self.cfg.filter_max_sizes) != 0:
+            assert len(self.cfg.filter_max_sizes) == 2
+            max_source_positions = min(self.cfg.filter_max_sizes[0], max_source_positions)
+            max_target_positions = min(self.cfg.filter_max_sizes[1], max_target_positions)
+        return max_source_positions, max_target_positions
 
     @property
     def source_dictionary(self):
@@ -449,3 +478,62 @@ class TranslationTask(FairseqTask):
             return sacrebleu.corpus_bleu(hyps, [refs], tokenize="none")
         else:
             return sacrebleu.corpus_bleu(hyps, [refs])
+
+    def filter_indices_by_size(self, indices, dataset, max_positions=None, ignore_invalid_inputs=False):
+        indices = super().filter_indices_by_size(indices, dataset, max_positions, ignore_invalid_inputs)
+
+        if len(self.cfg.filter_min_sizes) != 0:
+            assert len(self.cfg.filter_min_sizes) == 2
+
+            ignored_index = (dataset.src_sizes[indices] < self.cfg.filter_min_sizes[0]) | (
+                dataset.tgt_sizes[indices] < self.cfg.filter_min_sizes[1]
+            )
+            ignored = indices[ignored_index]
+
+            if len(ignored) > 0:
+                indices = indices[~ignored_index]
+
+                if not ignore_invalid_inputs:
+                    raise Exception(
+                        (
+                            "Size of sample #{} is invalid (={}) since min_positions={}, "
+                            "skip this example with --skip-invalid-size-inputs-valid-test"
+                        ).format(ignored[0], dataset.size(ignored[0]), self.cfg.filter_min_sizes),
+                    )
+                logger.warning(
+                    (
+                        "{:,} samples have invalid sizes and will be skipped, min_positions={}, first few sample ids={}"
+                    ).format(len(ignored), self.cfg.filter_min_sizes, ignored[:10]),
+                )
+
+        if len(self.cfg.filter_ratio) != 0:
+            assert len(self.cfg.filter_ratio) <= 2
+
+            # the range of len_tgt / len_src
+            if len(self.cfg.filter_ratio) == 1:
+                ignored_index = (dataset.tgt_sizes[indices] > dataset.src_sizes[indices] * self.cfg.filter_ratio[0]) | (
+                    dataset.src_sizes[indices] > dataset.tgt_sizes[indices] * self.cfg.filter_ratio[0]
+                )
+            else:
+                ignored_index = (dataset.tgt_sizes[indices] < dataset.src_sizes[indices] * self.cfg.filter_ratio[0]) | (
+                    dataset.tgt_sizes[indices] > dataset.src_sizes[indices] * self.cfg.filter_ratio[1]
+                )
+            ignored = indices[ignored_index]
+
+            if len(ignored) > 0:
+                indices = indices[~ignored_index]
+
+                if not ignore_invalid_inputs:
+                    raise Exception(
+                        (
+                            "Size of sample #{} is invalid (={}) since max_ratio={}, "
+                            "skip this example with --skip-invalid-size-inputs-valid-test"
+                        ).format(ignored[0], dataset.size(ignored[0]), self.cfg.filter_ratio),
+                    )
+                logger.warning(
+                    (
+                        "{:,} samples have invalid sizes and will be skipped, min_ratio={}, first few sample ids={}"
+                    ).format(len(ignored), self.cfg.filter_ratio, ignored[:10]),
+                )
+
+        return indices
