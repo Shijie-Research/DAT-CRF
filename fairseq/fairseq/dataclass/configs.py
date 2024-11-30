@@ -767,6 +767,13 @@ class GenerationConfig(FairseqDataclass):
         default=False,
         metadata={"help": "if set, the last checkpoint are assumed to be a reranker to rescore the translations"},
     )
+    iter_decode_length_format: str = field(
+        default="none",
+        metadata={
+            "help": "special decoding format for length predictor.",
+            "choices": ["none", "topk", "oracle"],
+        },
+    )
     retain_iter_history: bool = field(
         default=False,
         metadata={"help": "if set, decoding returns the whole history of iterative refinement"},

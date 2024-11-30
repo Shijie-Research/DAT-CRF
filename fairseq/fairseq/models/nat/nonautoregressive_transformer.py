@@ -135,14 +135,15 @@ class NATransformerModel(FairseqNATModel):
             history=history,
         )
 
-    def initialize_output_tokens(self, encoder_out, src_tokens):
+    def initialize_output_tokens(self, encoder_out, src_tokens, length_tgt=None):
         # length prediction
-        length_tgt = self.decoder.forward_length_prediction(
-            self.decoder.forward_length(normalize=True, encoder_out=encoder_out),
-            encoder_out=encoder_out,
-        )
+        if length_tgt is None:
+            length_tgt = self.decoder.forward_length_prediction(
+                self.decoder.forward_length(normalize=True, encoder_out=encoder_out),
+                encoder_out=encoder_out,
+            )
 
-        max_length = length_tgt.clamp_(min=2).max()
+        max_length = length_tgt.clamp_(min=2, max=self.max_decoder_positions()).max()
         idx_length = utils.new_arange(src_tokens, max_length)
 
         initial_output_tokens = src_tokens.new_zeros(src_tokens.size(0), max_length).fill_(self.pad)

@@ -145,6 +145,7 @@ class TranslationLevenshteinTask(TranslationTask):
             decoding_format=getattr(args, "decoding_format", None),
             adaptive=not getattr(args, "iter_decode_force_max_iter", False),
             retain_history=getattr(args, "retain_iter_history", False),
+            length_format=getattr(args, "iter_decode_length_format", "none"),
         )
 
     def build_dataset_for_inference(self, src_tokens, src_lengths, constraints=None):

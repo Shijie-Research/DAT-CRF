@@ -30,6 +30,7 @@ class IterativeRefinementGenerator(object):
         adaptive=True,
         retain_history=False,
         reranking=False,
+        length_format="none",
     ):
         """
         Generates translations based on iterative refinement.
@@ -58,6 +59,7 @@ class IterativeRefinementGenerator(object):
         self.retain_history = retain_history
         self.adaptive = adaptive
         self.models = models
+        self.length_format = length_format
 
     def generate_batched_itr(
         self,
@@ -125,7 +127,8 @@ class IterativeRefinementGenerator(object):
 
         # initialize
         encoder_out = model.forward_encoder([src_tokens, src_lengths])
-        prev_decoder_out = model.initialize_output_tokens(encoder_out, src_tokens)
+        length_tgt = sample["target"].ne(self.pad).sum(-1) if self.length_format == "oracle" else None
+        prev_decoder_out = model.initialize_output_tokens(encoder_out, src_tokens, length_tgt=length_tgt)
 
         if self.beam_size > 1:
             assert model.allow_length_beam, "{} does not support decoding with length beam.".format(
