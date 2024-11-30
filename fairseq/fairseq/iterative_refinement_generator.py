@@ -183,7 +183,7 @@ class IterativeRefinementGenerator(object):
                 "alignment": alignment,
             }
 
-        for step in range(self.max_iter + 1):
+        for step in range(1, self.max_iter + 1):
 
             decoder_options = {
                 "eos_penalty": self.eos_penalty,
@@ -193,7 +193,7 @@ class IterativeRefinementGenerator(object):
             }
             prev_decoder_out = prev_decoder_out._replace(
                 step=step,
-                max_step=self.max_iter + 1,
+                max_step=self.max_iter,
             )
 
             decoder_out = model.forward_decoder(prev_decoder_out, encoder_out, **decoder_options)
