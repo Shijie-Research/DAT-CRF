@@ -468,6 +468,7 @@ def merge_with_parent(dc: FairseqDataclass, cfg: DictConfig, remove_missing=Fals
             remove_missing_rec(cfg, dc)
 
     merged_cfg = OmegaConf.merge(dc, cfg)
+    merged_cfg = OmegaConf.create(OmegaConf.to_container(merged_cfg, resolve=True, enum_to_str=True))
     merged_cfg.__dict__["_parent"] = cfg.__dict__["_parent"]
     OmegaConf.set_struct(merged_cfg, True)
     return merged_cfg
