@@ -1418,6 +1418,8 @@ class Trainer(object):
         with metrics.aggregate() as agg:
             if logging_outputs is not None:
                 self.task.reduce_metrics(logging_outputs, self.get_criterion())
+                if hasattr(self.model.__class__, "reduce_metrics"):
+                    self.model.__class__.reduce_metrics(logging_outputs)
                 del logging_outputs
 
             # extra warning for criterions that don't properly log a loss value
