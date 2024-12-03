@@ -232,21 +232,23 @@ def _main(cfg: DictConfig, output_file):
                         extra_symbols_to_ignore=get_symbols_to_strip_from_output(generator),
                     )
 
-            src_str = decode_fn(src_str)
+            detok_src_str = decode_fn(src_str)
             if has_target:
-                target_str = decode_fn(target_str)
+                detok_target_str = decode_fn(target_str)
 
             if not cfg.common_eval.quiet:
                 if src_dict is not None:
                     print("S-{}\t{}".format(sample_id, src_str), file=output_file)
+                    print("DS-{}\t{}".format(sample_id, detok_src_str), file=output_file)
                 if has_target:
                     print("T-{}\t{}".format(sample_id, target_str), file=output_file)
+                    print("DT-{}\t{}".format(sample_id, detok_target_str), file=output_file)
 
             # Process top predictions
             for j, hypo in enumerate(hypos[i][: cfg.generation.nbest]):
                 hypo_tokens, hypo_str, alignment = utils.post_process_prediction(
                     hypo_tokens=hypo["tokens"].int().cpu(),
-                    src_str=src_str,
+                    src_str=detok_src_str,
                     alignment=hypo["alignment"],
                     align_dict=align_dict,
                     tgt_dict=tgt_dict,
@@ -263,7 +265,7 @@ def _main(cfg: DictConfig, output_file):
                     )
                     # detokenized hypothesis
                     print(
-                        "D-{}\t{}\t{}".format(sample_id, score, detok_hypo_str),
+                        "DH-{}\t{}\t{}".format(sample_id, score, detok_hypo_str),
                         file=output_file,
                     )
                     print(
@@ -307,7 +309,7 @@ def _main(cfg: DictConfig, output_file):
                         for step, h in enumerate(hypo["history"]):
                             _, h_str, _ = utils.post_process_prediction(
                                 hypo_tokens=h["tokens"].int().cpu(),
-                                src_str=src_str,
+                                src_str=detok_src_str,
                                 alignment=None,
                                 align_dict=None,
                                 tgt_dict=tgt_dict,
@@ -322,10 +324,10 @@ def _main(cfg: DictConfig, output_file):
                 if has_target and j == 0:
                     if align_dict is not None or cfg.common_eval.post_process is not None:
                         # Convert back to tokens for evaluation with unk replacement and/or without BPE
-                        target_tokens = tgt_dict.encode_line(target_str, add_if_not_exist=True)
+                        target_tokens = tgt_dict.encode_line(detok_target_str, add_if_not_exist=True)
                         hypo_tokens = tgt_dict.encode_line(detok_hypo_str, add_if_not_exist=True)
                     if hasattr(scorer, "add_string"):
-                        scorer.add_string(target_str, detok_hypo_str)
+                        scorer.add_string(detok_target_str, detok_hypo_str)
                     else:
                         scorer.add(target_tokens, hypo_tokens)
 
