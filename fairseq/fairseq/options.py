@@ -50,6 +50,7 @@ def get_generation_parser(interactive=False, default_task="translation"):
     parser = get_parser("Generation", default_task)
     add_dataset_args(parser, gen=True)
     add_distributed_training_args(parser, default_world_size=1)
+    add_model_args(parser)
     add_generation_args(parser)
     add_checkpoint_args(parser)
     if interactive:
@@ -137,7 +138,7 @@ def parse_args_and_arch(
     args, _ = parser.parse_known_args(input_args)
 
     # Add model-specific args to parser.
-    if hasattr(args, "arch"):
+    if hasattr(args, "arch") and args.arch is not None:
         model_specific_group = parser.add_argument_group(
             "Model-specific configuration",
             # Only include attributes which are explicitly given as command-line
