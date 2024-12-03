@@ -42,7 +42,7 @@ def main(cfg: DictConfig):
         os.makedirs(cfg.common_eval.results_path, exist_ok=True)
         output_path = os.path.join(
             cfg.common_eval.results_path,
-            "generate-{}.txt".format(cfg.dataset.gen_subset),
+            "generate-{}{}.txt".format(cfg.dataset.gen_subset, cfg.generation.generate_suffix),
         )
         with open(output_path, "w", buffering=1, encoding="utf-8") as h:
             return _main(cfg, h)

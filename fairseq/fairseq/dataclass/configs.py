@@ -801,6 +801,7 @@ class GenerationConfig(FairseqDataclass):
         metadata={"help": "if set, dont use seed for initializing random generators"},
     )
     eos_token: Optional[str] = field(default=None, metadata={"help": "EOS token"})
+    generate_suffix: str = field(default="", metadata={"help": "suffix to add to the generate file name"})
 
 
 @dataclass
