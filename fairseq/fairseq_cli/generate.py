@@ -359,7 +359,7 @@ def _main(cfg: DictConfig, output_file):
                 )
         # use print to be consistent with other main outputs: S-, H-, T-, D- and so on
         print(
-            "Generate {} with beam={}: {}".format(cfg.dataset.gen_subset, cfg.generation.beam, scorer.result_string()),
+            "Generate {} with beam={}: {}".format(cfg.dataset.gen_subset, generator.beam_size, scorer.result_string()),
             file=output_file,
         )
 
