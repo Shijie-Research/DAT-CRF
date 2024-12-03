@@ -199,14 +199,16 @@ class NATransformerDecoder(FairseqNATDecoder):
         self.embed_length = Embedding(256, self.encoder_embed_dim, None)
 
     @ensemble_decoder
-    def forward(self, normalize, encoder_out, prev_output_tokens, step=0, **unused):
-        features, _ = self.extract_features(
+    def forward(self, normalize, encoder_out, prev_output_tokens, step=0, return_all_hiddens=False, **unused):
+        features, extra = self.extract_features(
             prev_output_tokens,
             encoder_out=encoder_out,
             embedding_copy=(step == 0) & self.src_embedding_copy,
+            return_all_hiddens=return_all_hiddens,
         )
         decoder_out = self.output_layer(features)
-        return F.log_softmax(decoder_out, -1) if normalize else decoder_out
+        decoder_out = F.log_softmax(decoder_out, -1) if normalize else decoder_out
+        return (decoder_out, extra) if return_all_hiddens else decoder_out
 
     @ensemble_decoder
     def forward_length(self, normalize, encoder_out):
@@ -221,7 +223,15 @@ class NATransformerDecoder(FairseqNATDecoder):
         length_out = F.linear(enc_feats, self.embed_length.weight)
         return F.log_softmax(length_out, -1) if normalize else length_out
 
-    def extract_features(self, prev_output_tokens, encoder_out=None, early_exit=None, embedding_copy=False, **unused):
+    def extract_features(
+        self,
+        prev_output_tokens,
+        encoder_out=None,
+        early_exit=None,
+        embedding_copy=False,
+        return_all_hiddens=False,
+        **unused,
+    ):
         """
         Similar to *forward* but only return features.
 
@@ -256,7 +266,9 @@ class NATransformerDecoder(FairseqNATDecoder):
         # B x T x C -> T x B x C
         x = x.transpose(0, 1)
         attn = None
-        inner_states = [x]
+        inner_states = []
+        if return_all_hiddens:
+            inner_states.append(x)
 
         # decoder layers
         for i, layer in enumerate(self.layers):
@@ -280,7 +292,8 @@ class NATransformerDecoder(FairseqNATDecoder):
                 self_attn_mask=None,
                 self_attn_padding_mask=decoder_padding_mask,
             )
-            inner_states.append(x)
+            if return_all_hiddens:
+                inner_states.append(x)
 
         if self.layer_norm:
             x = self.layer_norm(x)
@@ -396,4 +409,17 @@ def base_architecture(args):
 
 @register_model_architecture("nonautoregressive_transformer", "nonautoregressive_transformer_wmt_en_de")
 def nonautoregressive_transformer_wmt_en_de(args):
+    base_architecture(args)
+
+
+@register_model_architecture("nonautoregressive_transformer", "nonautoregressive_transformer_iwslt_de_en")
+def nonautoregressive_transformer_iwslt_de_en(args):
+    args.encoder_embed_dim = getattr(args, "encoder_embed_dim", 512)
+    args.encoder_ffn_embed_dim = getattr(args, "encoder_ffn_embed_dim", 1024)
+    args.encoder_attention_heads = getattr(args, "encoder_attention_heads", 4)
+    args.encoder_layers = getattr(args, "encoder_layers", 6)
+    args.decoder_embed_dim = getattr(args, "decoder_embed_dim", 512)
+    args.decoder_ffn_embed_dim = getattr(args, "decoder_ffn_embed_dim", 1024)
+    args.decoder_attention_heads = getattr(args, "decoder_attention_heads", 4)
+    args.decoder_layers = getattr(args, "decoder_layers", 6)
     base_architecture(args)

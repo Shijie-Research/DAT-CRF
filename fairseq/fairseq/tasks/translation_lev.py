@@ -5,8 +5,6 @@
 
 from dataclasses import dataclass, field
 
-import torch
-
 from fairseq import utils
 from fairseq.data import LanguagePairDataset
 from fairseq.dataclass import ChoiceEnum
@@ -62,6 +60,8 @@ class TranslationLevenshteinTask(TranslationTask):
             left_pad_target=self.cfg.left_pad_target,
             max_source_positions=self.cfg.max_source_positions,
             max_target_positions=self.cfg.max_target_positions,
+            shuffle=(split != "test"),
+            pad_to_multiple=self.cfg.required_seq_len_multiple,
             prepend_bos=True,
         )
 
@@ -155,17 +155,18 @@ class TranslationLevenshteinTask(TranslationTask):
         return LanguagePairDataset(src_tokens, src_lengths, self.source_dictionary, append_bos=True)
 
     def train_step(self, sample, model, criterion, optimizer, update_num, ignore_grad=False):
-        model.train()
         sample["prev_target"] = self.inject_noise(sample["target"])
-        loss, sample_size, logging_output = criterion(model, sample)
-        if ignore_grad:
-            loss *= 0
-        optimizer.backward(loss)
+        loss, sample_size, logging_output = super().train_step(
+            sample,
+            model,
+            criterion,
+            optimizer,
+            update_num,
+            ignore_grad=ignore_grad,
+        )
         return loss, sample_size, logging_output
 
     def valid_step(self, sample, model, criterion):
-        model.eval()
-        with torch.no_grad():
-            sample["prev_target"] = self.inject_noise(sample["target"])
-            loss, sample_size, logging_output = criterion(model, sample)
+        sample["prev_target"] = self.inject_noise(sample["target"])
+        loss, sample_size, logging_output = super().valid_step(sample, model, criterion)
         return loss, sample_size, logging_output

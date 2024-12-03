@@ -186,6 +186,7 @@ class IterativeRefinementGenerator(object):
                 "eos_penalty": self.eos_penalty,
                 "max_ratio": self.max_ratio,
                 "decoding_format": self.decoding_format,
+                "src_tokens": src_tokens,
             }
             prev_decoder_out = prev_decoder_out._replace(
                 step=step,
