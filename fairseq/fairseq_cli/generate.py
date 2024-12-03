@@ -7,7 +7,7 @@
 Translate pre-processed data with a trained model.
 """
 
-import ast
+import json
 import logging
 import math
 import os
@@ -89,7 +89,7 @@ def _main(cfg: DictConfig, output_file):
         src_dict = None
     tgt_dict = task.target_dictionary
 
-    overrides = ast.literal_eval(cfg.common_eval.model_overrides)
+    overrides = json.loads(cfg.common_eval.model_overrides)
 
     # Load ensemble
     logger.info("loading model(s) from {}".format(cfg.common_eval.path))
