@@ -515,12 +515,16 @@ class FairseqTask(object):
             loss *= 0
         with torch.autograd.profiler.record_function("backward"):
             optimizer.backward(loss)
+        if hasattr(model, "logging_output_train_valid_hook"):
+            model.logging_output_train_valid_hook(logging_output)
         return loss, sample_size, logging_output
 
     def valid_step(self, sample, model, criterion):
         model.eval()
         with torch.no_grad():
             loss, sample_size, logging_output = criterion(model, sample)
+        if hasattr(model, "logging_output_train_valid_hook"):
+            model.logging_output_train_valid_hook(logging_output)
         return loss, sample_size, logging_output
 
     def optimizer_step(self, optimizer, model, update_num):
