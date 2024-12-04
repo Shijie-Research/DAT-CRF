@@ -8,7 +8,7 @@ import re
 from dataclasses import dataclass, field, fields
 from typing import List, Optional
 
-from omegaconf import II
+from omegaconf import II, DictConfig
 
 from fairseq import utils
 from fairseq.dataclass import ChoiceEnum, FairseqDataclass
@@ -246,6 +246,8 @@ class TransformerConfig(FairseqDataclass):
                     if safe_hasattr(args, "decoder"):
                         #  in some cases, the args we receive is already structured (as DictConfigs), so let's just build the correct DC
                         seen.add("decoder")
+                        for key in args.decoder.keys():
+                            seen.add(f"decoder_{key}")
                         config.decoder = DecoderConfig(**args.decoder)
                     else:
                         config.decoder = cls._copy_keys(args, DecoderConfig, "decoder", seen)
@@ -253,6 +255,8 @@ class TransformerConfig(FairseqDataclass):
                     # same but for encoder
                     if safe_hasattr(args, "encoder"):
                         seen.add("encoder")
+                        for key in args.encoder.keys():
+                            seen.add(f"encoder_{key}")
                         config.encoder = EncDecBaseConfig(**args.encoder)
                     else:
                         config.encoder = cls._copy_keys(args, EncDecBaseConfig, "encoder", seen)
@@ -274,7 +278,9 @@ class TransformerConfig(FairseqDataclass):
             args_dict = (
                 args._asdict()
                 if safe_hasattr(args, "_asdict")
-                else vars(args) if safe_hasattr(args, "__dict__") else {}
+                else (
+                    dict(args) if isinstance(args, DictConfig) else vars(args) if safe_hasattr(args, "__dict__") else {}
+                )
             )  # namedtupled doesn't have __dict__ :-/
             for key, value in args_dict.items():
                 if key not in seen:
