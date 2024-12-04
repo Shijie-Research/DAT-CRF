@@ -197,7 +197,11 @@ class NATransformerDecoder(FairseqNATDecoder):
         self.pred_length_offset = getattr(args, "pred_length_offset", False)
         self.length_loss_factor = getattr(args, "length_loss_factor", 0.1)
         self.src_embedding_copy = getattr(args, "src_embedding_copy", False)
-        self.embed_length = Embedding(256, self.encoder_embed_dim, None)
+        self.embed_length = Embedding(
+            256 if self.pred_length_offset else self.max_positions(),
+            self.encoder_embed_dim,
+            None,
+        )
 
     @ensemble_decoder
     def forward(self, normalize, encoder_out, prev_output_tokens, step=0, return_all_hiddens=False, **unused):
@@ -353,17 +357,17 @@ class NATransformerDecoder(FairseqNATDecoder):
             # obtain the length target
             tgt_lengs = tgt_tokens.ne(self.padding_idx).sum(1).long()
             if self.pred_length_offset:
-                length_tgt = tgt_lengs - src_lengs + 128
+                length_tgt = tgt_lengs - src_lengs + self.embed_length.num_embeddings // 2
             else:
                 length_tgt = tgt_lengs
-            length_tgt = length_tgt.clamp(min=0, max=255)
+            length_tgt = length_tgt.clamp(min=0, max=self.embed_length.num_embeddings - 1)
 
         else:
             # predict the length target (greedy for now)
             # TODO: implementing length-beam
             pred_lengs = length_out.max(-1)[1]
             if self.pred_length_offset:
-                length_tgt = pred_lengs - 128 + src_lengs
+                length_tgt = pred_lengs - self.embed_length.num_embeddings // 2 + src_lengs
             else:
                 length_tgt = pred_lengs
 
