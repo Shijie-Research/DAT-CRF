@@ -163,3 +163,4 @@ cython_debug/
 
 # experimental results
 experiments/
+/bash_scripts/

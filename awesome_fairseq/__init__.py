@@ -168,10 +168,6 @@ class MetaClass:
             self.task_parser.print_help()
             sys.exit(0)
 
-        # setup wand project name
-        if self.run_type == "train" and not DEBUG_MODE:
-            os.environ["WANDB_NAME"] = model
-
         # 0. register all default configs
         try:
             default_configs = getattr(self, run_type + "_configs")
@@ -180,13 +176,12 @@ class MetaClass:
             raise RuntimeError(f"Configs for run type {run_type} is not implemented")
 
         # 1. override configs if it is in debug
+        configs = {k: v[0] for k, v in CONFIGS.items() if isinstance(v, tuple) and len(v) == 2}
+        debug_configs = {k: v[1] for k, v in CONFIGS.items() if isinstance(v, tuple) and len(v) == 2}
+        CONFIGS.update(**configs)
         if DEBUG_MODE:
             with HeadLine.wrap("RUNING IN DEBUG MODE", level=2, warning=True):
-                configs = {k: v[1] for k, v in CONFIGS.items() if isinstance(v, tuple) and len(v) == 2}
-                CONFIGS.verbose_update(configs)
-        else:
-            configs = {k: v[0] for k, v in CONFIGS.items() if isinstance(v, tuple) and len(v) == 2}
-            CONFIGS.update(**configs)
+                CONFIGS.verbose_update(debug_configs)
 
         # 2. override configs if any system configs
         if len(remaining_args) > 0:
@@ -195,7 +190,7 @@ class MetaClass:
 
         # 3. override configs by post process
         with HeadLine.wrap("POST PROCESS CONFIGS", level=3):
-            self.post_process_configs()
+            self.process_configs()
 
     def save_dir(self, task=None, model=None):
         task = self.task if task is None else task
@@ -216,7 +211,7 @@ class MetaClass:
             "--log-format": "simple",
             "--log-file": "{save_dir}/log.txt",
             "--tensorboard-logdir": "{save_dir}/tensorboard",
-            "--wandb-project": None if WANDB_DISABLED else "fairseq",
+            "--wandb-project": None if WANDB_DISABLED else self.task_group,
             "--seed": "19491001",
             "--fp16": True,
             "--memory-efficient-fp16": False,  # will increase training time
@@ -234,7 +229,7 @@ class MetaClass:
         }
         return configs
 
-    def post_process_configs(self):
+    def process_configs(self):
         _grouped_configs = {k: CONFIGS.pop(k) for k in list(CONFIGS.keys()) if "." in k}
 
         grouped_configs = defaultdict(dict)

@@ -37,7 +37,7 @@ class TransformerIWSLT14(Translation):
                 "--validate-interval": "0",  # do not validate at end_of_epoch
                 "--validate-interval-updates": ("1000", "10"),
                 # optimization
-                "--max-update": ("30000", "20"),
+                "--max-update": ("50000", "20"),
                 "--clip-norm": "5.0",
                 "--lr": "5e-4",
                 "--stop-min-lr": "1e-9",
@@ -121,8 +121,6 @@ class TransformerWMT17(TransformerWMT14):
                 # model
                 "--share-all-embeddings": False,
                 "--share-decoder-input-output-embed": True,
-                # optimization
-                "--max-update": ("50000", "20"),
             },
         )
         return configs

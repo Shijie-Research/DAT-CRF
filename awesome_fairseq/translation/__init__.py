@@ -14,6 +14,7 @@ register_translation_tasks = partial(Registry.register_model_to_run_types, "trai
 
 class Translation(MetaClass):
     task_group: str = "translation"
+    task_args = {}
 
     def __init__(self, *, task, remaining_args, **kwargs):
         self.task_parser.add_argument("--data-distilled", action="store_true", help="use distilled dataset")
@@ -22,7 +23,7 @@ class Translation(MetaClass):
 
         # task_name is in the form of `dataset_src_tgt-task_arg1-task_arg2`,
         # e.g. iwslt14_de_en or iwslt14_de_en-distilled.
-        self.task_args = {k: v for k, v in vars(task_args).items()}
+        self.task_args.update({k[5:]: v for k, v in vars(task_args).items()})
         _, self.source_lang, self.target_lang = task.split("_")
 
         super().__init__(task=task, remaining_args=remaining_args, **kwargs)
@@ -48,7 +49,7 @@ class Translation(MetaClass):
                 # checkpoint
                 "--best-checkpoint-metric": "bleu",
                 "--maximize-best-checkpoint-metric": True,
-                "--keep-best-checkpoints": "10",
+                "--keep-best-checkpoints": "5",
                 # optimization
                 "--update-freq": "1",
             },
