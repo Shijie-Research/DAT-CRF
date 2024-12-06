@@ -7,6 +7,7 @@ import ctypes
 import math
 import sys
 from dataclasses import dataclass, field
+from typing import Optional
 
 import torch
 
@@ -32,8 +33,13 @@ class BleuStat(ctypes.Structure):
 
 @dataclass
 class SacrebleuConfig(FairseqDataclass):
-    sacrebleu_tokenizer: EvaluationTokenizer.ALL_TOKENIZER_TYPES = field(default="13a", metadata={"help": "tokenizer"})
+    target_lang: str = field(default="en", metadata={"help": "target language"})
+    sacrebleu_tokenizer: Optional[EvaluationTokenizer.ALL_TOKENIZER_TYPES] = field(
+        default=None,
+        metadata={"help": "tokenizer"},
+    )
     sacrebleu_lowercase: bool = field(default=False, metadata={"help": "apply lowercasing"})
+    sacrebleu_punctuation_removal: bool = field(default=False, metadata={"help": "remove punctuation"})
     sacrebleu_char_level: bool = field(default=False, metadata={"help": "evaluate at character level"})
 
 
@@ -45,8 +51,10 @@ class SacrebleuScorer(BaseScorer):
 
         self.sacrebleu = sacrebleu
         self.tokenizer = EvaluationTokenizer(
+            trg_lang=cfg.target_lang,
             tokenizer_type=cfg.sacrebleu_tokenizer,
             lowercase=cfg.sacrebleu_lowercase,
+            punctuation_removal=cfg.sacrebleu_punctuation_removal,
             character_tokenization=cfg.sacrebleu_char_level,
         )
 

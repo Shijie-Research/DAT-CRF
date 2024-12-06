@@ -4,12 +4,11 @@
 # LICENSE file in the root directory of this source tree.
 
 import unicodedata
+from typing import Optional
 
 import sacrebleu as sb
 
 from fairseq.dataclass import ChoiceEnum
-
-SACREBLEU_V2_ABOVE = int(sb.__version__[0]) >= 2
 
 
 class EvaluationTokenizer(object):
@@ -28,25 +27,28 @@ class EvaluationTokenizer(object):
 
     SPACE = chr(32)
     SPACE_ESCAPE = chr(9601)
-    _ALL_TOKENIZER_TYPES = sb.BLEU.TOKENIZERS if SACREBLEU_V2_ABOVE else ["none", "13a", "intl", "zh", "ja-mecab"]
+    _ALL_TOKENIZER_TYPES = sb.BLEU.TOKENIZERS
     ALL_TOKENIZER_TYPES = ChoiceEnum(_ALL_TOKENIZER_TYPES)
 
     def __init__(
         self,
-        tokenizer_type: str = "13a",
+        trg_lang: Optional[str] = None,
+        tokenizer_type: Optional[str] = None,
         lowercase: bool = False,
         punctuation_removal: bool = False,
         character_tokenization: bool = False,
     ):
+        assert (
+            tokenizer_type is None or tokenizer_type in self._ALL_TOKENIZER_TYPES
+        ), f"{tokenizer_type}, {self._ALL_TOKENIZER_TYPES}"
 
-        assert tokenizer_type in self._ALL_TOKENIZER_TYPES, f"{tokenizer_type}, {self._ALL_TOKENIZER_TYPES}"
+        if tokenizer_type is None:
+            assert trg_lang is not None, "trg_lang must be specified if tokenizer_type is not given"
+
         self.lowercase = lowercase
         self.punctuation_removal = punctuation_removal
         self.character_tokenization = character_tokenization
-        if SACREBLEU_V2_ABOVE:
-            self.tokenizer = sb.BLEU(tokenize=str(tokenizer_type)).tokenizer
-        else:
-            self.tokenizer = sb.tokenizers.TOKENIZERS[tokenizer_type]()
+        self.tokenizer = sb.BLEU(trg_lang=trg_lang, tokenize=tokenizer_type).tokenizer
 
     @classmethod
     def remove_punctuation(cls, sent: str):
