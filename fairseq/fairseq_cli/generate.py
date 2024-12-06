@@ -336,7 +336,8 @@ def _main(cfg: DictConfig, output_file):
         num_sentences += sample["nsentences"] if "nsentences" in sample else sample["id"].numel()
 
     logger.info("NOTE: hypothesis and token scores are output in base 2")
-    logger.info(
+    # some results need to compare the generation speed, so output this information to the output file.
+    print(
         "Translated {:,} sentences ({:,} tokens) in {:.1f}s ({:.2f} sentences/s, {:.2f} tokens/s)".format(
             num_sentences,
             gen_timer.n,
@@ -344,6 +345,7 @@ def _main(cfg: DictConfig, output_file):
             num_sentences / gen_timer.sum,
             1.0 / gen_timer.avg,
         ),
+        file=output_file,
     )
     if has_target:
         if cfg.bpe and not cfg.generation.sacrebleu:
