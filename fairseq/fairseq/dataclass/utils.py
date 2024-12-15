@@ -436,8 +436,12 @@ def overwrite_args_by_name(cfg: DictConfig, overrides: Dict[str, any]):
                 else:
                     overwrite_args_by_name(cfg[k], overrides)
             elif k in cfg and isinstance(cfg[k], Namespace):
-                for override_key, val in overrides.items():
-                    setattr(cfg[k], override_key, val)
+                if k in overrides and isinstance(overrides[k], dict):
+                    for override_key, val in overrides[k].items():
+                        setattr(cfg[k], override_key, val)
+                else:
+                    for override_key, val in overrides.items():
+                        setattr(cfg[k], override_key, val)
             elif k in overrides:
                 if k in REGISTRIES and overrides[k] in REGISTRIES[k]["dataclass_registry"]:
                     cfg[k] = DictConfig(REGISTRIES[k]["dataclass_registry"][overrides[k]])
