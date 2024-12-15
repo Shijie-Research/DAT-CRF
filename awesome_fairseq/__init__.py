@@ -230,7 +230,8 @@ class MetaClass:
         return configs
 
     def process_configs(self):
-        _grouped_configs = {k: CONFIGS.pop(k) for k in list(CONFIGS.keys()) if "." in k}
+        _grouped_configs = ConfigsDict({k: CONFIGS.pop(k) for k in list(CONFIGS.keys()) if "." in k})
+        self._pre_process_configs(_grouped_configs)
 
         grouped_configs = defaultdict(dict)
         for k, v in _grouped_configs.items():
@@ -266,6 +267,9 @@ class MetaClass:
                 f"Found unused argument groups: {dict(grouped_configs)}. "
                 f"Please check if these arguments are necessary or mistakenly provided.",
             )
+
+    def _pre_process_configs(self, grouped_configs):
+        pass
 
     def _post_process_configs(self, grouped_configs):
         save_dir = Path(self.save_dir()).as_posix()
