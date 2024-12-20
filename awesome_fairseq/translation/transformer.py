@@ -124,3 +124,41 @@ class TransformerWMT17(TransformerWMT14):
             },
         )
         return configs
+
+
+@register_tasks("iwslt17_en_de", "nc2016_en_de", "europarl7_en_de")
+class TransformerSent(TransformerIWSLT14):
+    @property
+    def train_configs(self):
+        configs = super().train_configs
+        configs.update(
+            {
+                # model
+                "--arch": "transformer_wmt_en_de",
+            },
+        )
+        if "europarl7" in self.task:
+            configs.update(
+                {
+                    "--max-tokens": ("16384", "1024"),
+                    "--dropout": "0.2",
+                },
+            )
+
+        return configs
+
+
+@register_tasks("iwslt17_en_zh")
+class TransformerIWSLT17(TransformerIWSLT14):
+    @property
+    def train_configs(self):
+        configs = super().train_configs
+        configs.update(
+            {
+                # model
+                "--arch": "transformer_wmt_en_de",
+                "--share-all-embeddings": False,
+                "--share-decoder-input-output-embed": True,
+            },
+        )
+        return configs
