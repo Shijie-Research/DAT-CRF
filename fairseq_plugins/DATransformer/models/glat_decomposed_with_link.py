@@ -134,11 +134,7 @@ class GlatDecomposedLink(FairseqNATModel):
                 )
 
     @classmethod
-    def from_pretrained(
-        cls,
-        model_name_or_path,
-        **kwargs,
-    ):
+    def from_pretrained(cls, model_name_or_path, **kwargs):
         from fairseq import checkpoint_utils, file_utils
 
         from .hub_interface import DATHubInterface
@@ -202,7 +198,7 @@ class GlatDecomposedLink(FairseqNATModel):
                 ("decoder.embed_positions.weight", model.decoder.embed_positions.weight.size(0)),
             ]:
                 if states[position_name].size(0) < target_position_length:
-                    logging.warn(
+                    logging.warning(
                         "Current max position length is longer than that of pre-trained checkpoints. Automatically extended...",
                     )
                     _index = torch.arange(states[position_name].size(1))
@@ -214,7 +210,7 @@ class GlatDecomposedLink(FairseqNATModel):
                             dim=0,
                         )
                 if states[position_name].size(0) > target_position_length:
-                    logging.warn(
+                    logging.warning(
                         "Current max position length is shorter than that of pre-trained checkpoints. Automatically truncated...",
                     )
                     states[position_name] = states[position_name][:target_position_length]
@@ -227,7 +223,7 @@ class GlatDecomposedLink(FairseqNATModel):
 
             if not args.segment_embedding:
                 if "decoder.embed_seg.weight" in states:
-                    logging.warn("--segment-embedding disabled. dropping decoder.embed_seg.weight ...")
+                    logging.warning("--segment-embedding disabled. dropping decoder.embed_seg.weight ...")
                     states.pop("decoder.embed_seg.weight")
             else:
                 ckpt_seg = states["decoder.embed_seg.weight"]
@@ -244,7 +240,7 @@ class GlatDecomposedLink(FairseqNATModel):
             #     states["decoder.embed_positions.weight"] = init_pos
 
             if "encoder.layers.0.para" in states.keys():
-                logging.warn(
+                logging.warning(
                     "Automatically converting lightseq transformer to fairseq transformer. "
                     "Please make sure that the architecture is matched; otherwise it may cause unexpected behaviours.",
                 )
@@ -474,11 +470,11 @@ class GlatDecomposedLink(FairseqNATModel):
     def extract_valid_links(self, content, valid_transition_mask):
         # content: batch * prelen * prelen * chunk
         # valid_transition_mask: batch * prelen * prelen
-
         prelen = content.shape[1]
         translen: int = self.args.max_transition_length
         if translen > prelen - 1:
             translen = prelen - 1
+
         valid_links_idx = (
             torch.arange(prelen, dtype=torch.long, device=content.device).unsqueeze(1)
             + torch.arange(translen, dtype=torch.long, device=content.device).unsqueeze(0)
@@ -556,9 +552,11 @@ class GlatDecomposedLink(FairseqNATModel):
         # Use multiple heads in calculating transition matrix
         query_chunks = query_linear(features_withpos).reshape(batch_size, prelen, chunk_num, chunk_size)
         key_chunks = key_linear(features_withpos).reshape(batch_size, prelen, chunk_num, chunk_size)
+
         # The head probability on each position. log_gates: batch_size * prelen * chunk_num
         log_gates = F.log_softmax(gate_linear(features_withpos), dim=-1, dtype=target_dtype)
-        # Transitition probability for each head. log_multi_content: batch_size * prelen * prelen * chunk_num
+
+        # Transition probability for each head. log_multi_content: batch_size * prelen * prelen * chunk_num
         log_multi_content = torch.einsum(
             "bicf,bjcf->bijc",
             query_chunks.to(dtype=target_dtype),
@@ -575,15 +573,16 @@ class GlatDecomposedLink(FairseqNATModel):
             transition_valid_mask = valid_links_idx <= bound_end.unsqueeze(-1)
         else:  # inferred from prev_output_tokens
             transition_valid_mask = prev_output_tokens.ne(self.pad).unsqueeze(1)
+
         # only allows left-to-right transition
         transition_valid_mask = transition_valid_mask & torch.ones(
             prelen,
             prelen,
             device=prev_output_tokens.device,
-            dtype=bool,
+            dtype=torch.bool,
         ).triu_(1).unsqueeze(0)
 
-        if self.args.max_transition_length != -1:  # finity transtion length, prepare for cuda input format
+        if self.args.max_transition_length != -1:  # finity transition length, prepare for cuda input format
             log_multi_content_extract, link_nouse_mask = self.extract_valid_links(
                 log_multi_content,
                 transition_valid_mask,
@@ -598,11 +597,8 @@ class GlatDecomposedLink(FairseqNATModel):
                 link_nouse_mask.unsqueeze(-1).unsqueeze(-1),
                 ninf,
             )
-            links = logsumexp_fast(
-                log_multi_content_extract + log_gates.unsqueeze(2),
-                dim=-1,
-            )  # batch_size * prelen * trans_len
-        else:  # infinility transition length, prepare for torch input format
+            links = logsumexp_fast(log_multi_content_extract + log_gates.unsqueeze(2), dim=-1)
+        else:  # infinity transition length, prepare for torch input format
             link_nouse_mask = transition_valid_mask.sum(dim=2, keepdim=True) == 0
             transition_valid_mask.masked_fill_(link_nouse_mask, True)
             log_multi_content.masked_fill_(~transition_valid_mask.unsqueeze(-1), ninf)

@@ -16,6 +16,9 @@
 
 
 def parse_anneal_argument(anneal_str):
+    if anneal_str is None:
+        return None
+
     def parse_value_pos(value_str):
         if "@" in value_str:
             value, pos = value_str.split("@")
@@ -31,6 +34,9 @@ def parse_anneal_argument(anneal_str):
 
 
 def get_anneal_value(anneal_params, update_num):
+    if anneal_params is None:
+        return 0
+
     last_value, last_pos = anneal_params[0][0], 0
     for value, pos in anneal_params:
         if update_num < pos:

@@ -25,7 +25,7 @@ class NATransformerIWSLT14(NATranslation):
                 "--noise": "full_mask",
                 "--eval-bleu-args.iter_decode_max_iter@int": "1",
                 "--eval-bleu-args.iter_decode_with_beam@int": "1",
-                "--eval-bleu-args::iter_decode_length_format@str": (None, "oracle"),
+                "--eval-bleu-args.iter_decode_length_format@str": (None, "oracle"),
                 # criterion
                 "--criterion": "nat_loss",
                 "--label-smoothing": "0.1",

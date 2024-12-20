@@ -33,7 +33,7 @@ class Translation(MetaClass):
         task_args.sort()
 
         task = "-".join([self.task, *task_args])
-        return super().save_dir(task=task)
+        return super().save_dir(task=task, model=model)
 
     @property
     def train_configs(self):

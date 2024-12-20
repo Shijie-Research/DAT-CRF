@@ -40,6 +40,8 @@ from fairseq.tasks.translation import TranslationConfig, TranslationTask
 from .translation_dat_dataset import TranslationDATDataset
 from .translation_dat_dict import TranslationDATDict
 
+EVAL_BLEU_ORDER = 4
+
 logger = logging.getLogger(__name__)
 
 
@@ -149,7 +151,6 @@ def load_langpair_dataset(
 
 @dataclass
 class TranslationDATConfig(TranslationConfig):
-    # options for DAT
     seg_tokens: int = field(
         default=0,
         metadata={
@@ -160,17 +161,20 @@ class TranslationDATConfig(TranslationConfig):
     upsample_scale: str = field(
         default="4~8",
         metadata={
-            "help": 'Specifies the upsample scale for the decoder input length in training. For instance, "4~8" indicates that the upsampling scale will be uniformly sampled from the range [4, 8];'
-            '"4" indicates fixed upsampling scale.',
+            "help": "Specifies the upsample scale for the decoder input length in training. "
+            "For instance, `4~8` indicates that the upsampling scale will be uniformly sampled from the range [4, 8];"
+            "`4` indicates fixed upsampling scale.",
         },
     )
     upsample_base: str = field(
         default="source",
         metadata={
             "help": 'Possible values are: ["predict", "source_old", "source"]. '
-            'If set to "predict", the DAG size will be determined by the golden target length during training and the predicted length during inference. Note that --length-loss-factor must be greater than 0 during training. '
-            'If set to "source_old", the DAG size will be determined by the source length during both training and inference. You can disable the length predictor during training by setting --length-loss-factor to 0. '
-            'If set to "source", the DAG size length is determined similarly to "source_old" but several token shorter. Not recommended.',
+            "If set to `predict`, the DAG size will be determined by the golden target length during training and the predicted length during inference. "
+            "Note that --length-loss-factor must be greater than 0 during training. "
+            "If set to `source_old`, the DAG size will be determined by the source length during both training and inference. "
+            "You can disable the length predictor during training by setting --length-loss-factor to 0. "
+            'If set to `source`, the DAG size length is determined similarly to "source_old" but several token shorter. Not recommended.',
         },
     )
     max_tokens_after_upsample: bool = field(
@@ -185,8 +189,8 @@ class TranslationDATConfig(TranslationConfig):
         default=None,
         metadata={
             "help": "Filters out samples that do not satisfy the specified len(target)/len(source) ratio constraints. "
-            'For example, if the ratio is set to "8", samples where len(target)/len(source) > 8 or len(target)/len(source) < 1/8 will be removed. '
-            'If set to "0.5~2", samples where len(target)/len(source) < 0.5 or len(target)/len(source) > 2 will be removed. '
+            "For example, if the ratio is set to `8`, samples where len(target)/len(source) > 8 or len(target)/len(source) < 1/8 will be removed. "
+            "If set to `0.5~2`, samples where len(target)/len(source) < 0.5 or len(target)/len(source) > 2 will be removed. "
             "Default: None (disabled).",
         },
     )
@@ -205,38 +209,44 @@ class TranslationDATConfig(TranslationConfig):
     decode_strategy: str = field(
         default="lookahead",
         metadata={
-            "help": 'Decoding strategy to use. Options include "greedy", "lookahead", "viterbi", "jointviterbi", "sample", and "beamsearch".',
+            "help": "Decoding strategy to use.",
+            "choices": ["greedy", "lookahead", "viterbi", "jointviterbi", "sample", "beamsearch"],
         },
     )
 
     decode_no_consecutive_repeated_ngram: int = field(
         default=0,
         metadata={
-            "help": "Prevent consecutive repeated k-grams (k <= n) in the generated text. Use 0 to disable this feature. This argument is used in greedy, lookahead, sample, and beam search decoding methods.",
+            "help": "Prevent consecutive repeated k-grams (k <= n) in the generated text. Use 0 to disable this feature. "
+            "This argument is used in greedy, lookahead, sample, and beam search decoding methods.",
         },
     )
     decode_no_repeated_ngram: int = field(
         default=0,
         metadata={
-            "help": "Prevent repeated k-grams (not necessarily consecutive) with order n or higher in the generated text. Use 0 to disable this feature. This argument is used in greedy, lookahead, sample, and beam search decoding methods.",
+            "help": "Prevent repeated k-grams (not necessarily consecutive) with order n or higher in the generated text. "
+            "Use 0 to disable this feature. This argument is used in greedy, lookahead, sample, and beam search decoding methods.",
         },
     )
     decode_top_cand_n: int = field(
         default=5,
         metadata={
-            "help": "Number of top candidates to consider during transition. This argument is used in greedy and lookahead decoding with ngram prevention, and sample and beamsearch decoding methods.",
+            "help": "Number of top candidates to consider during transition. "
+            "This argument is used in greedy and lookahead decoding with ngram prevention, and sample and beamsearch decoding methods.",
         },
     )
     decode_top_p: float = field(
         default=0.9,
         metadata={
-            "help": "Maximum probability of top candidates to consider during transition. This argument is used in greedy and lookahead decoding with ngram prevention, and sample and beamsearch decoding methods.",
+            "help": "Maximum probability of top candidates to consider during transition. "
+            "This argument is used in greedy and lookahead decoding with ngram prevention, and sample and beamsearch decoding methods.",
         },
     )
     decode_viterbibeta: float = field(
         default=1,
         metadata={
-            "help": "Parameter used for length penalty in Viterbi decoding. The sentence with the highest score is found using: P(A,Y|X) / |Y|^{beta}",
+            "help": "Parameter used for length penalty in Viterbi decoding. "
+            "The sentence with the highest score is found using: P(A,Y|X) / |Y|^{beta}",
         },
     )
     decode_temperature: float = field(default=1, metadata={"help": "Temperature to use in sample decoding."})
@@ -284,34 +294,38 @@ class TranslationDATConfig(TranslationConfig):
         default=0,
         metadata={
             "help": "Number of multiprocess workers to use during beamsearch decoding. "
-            "More workers will consume more memory. It does not affect decoding latency but decoding throughtput, "
-            'so you must use "fariseq-fastgenerate" to enable the overlapped decoding to tell the difference.',
+            "More workers will consume more memory. It does not affect decoding latency but decoding throughput, "
+            'so you must use "fairseq-fastgenerate" to enable the overlapped decoding to tell the difference.',
         },
     )
     decode_threads_per_worker: int = field(
         default=4,
         metadata={
             "help": "Number of threads per worker to use during beamsearch decoding. "
-            "This setting also applies to both vanilla decoding and overlapped decoding. A value between 2 and 8 is typically optimal.",
+            "This setting also applies to both vanilla decoding and overlapped decoding. "
+            "A value between 2 and 8 is typically optimal.",
         },
     )
     decode_dedup: bool = field(default=False, metadata={"help": "Enable token deduplication in BeamSearch."})
     max_encoder_batch_tokens: Optional[int] = field(
         default=None,
         metadata={
-            "help": "Specifies the maximum number of tokens for the encoder input to avoid running out of memory. The default value of None indicates no limit.",
+            "help": "Specifies the maximum number of tokens for the encoder input to avoid running out of memory. "
+            "The default value of None indicates no limit.",
         },
     )
     max_decoder_batch_tokens: Optional[int] = field(
         default=None,
         metadata={
-            "help": "Specifies the maximum number of tokens for the decoder input to avoid running out of memory. The default value of None indicates no limit.",
+            "help": "Specifies the maximum number of tokens for the decoder input to avoid running out of memory. "
+            "The default value of None indicates no limit.",
         },
     )
     max_transition_length: int = field(
         default=99999,
         metadata={
-            "help": "Specifies the maximum transition distance. A value of -1 indicates no limit, but this cannot be used with CUDA custom operations. "
+            "help": "Specifies the maximum transition distance. "
+            "A value of -1 indicates no limit, but this cannot be used with CUDA custom operations. "
             "To use CUDA operations with no limit, specify a very large number such as 99999.",
         },
     )
@@ -321,7 +335,10 @@ class TranslationDATConfig(TranslationConfig):
     )
     noise: str = field(
         default="random_delete",
-        metadata={"help": "type of noise", "choices": ["random_delete", "random_mask", "no_noise", "full_mask"]},
+        metadata={
+            "help": "type of noise",
+            "choices": ["random_delete", "random_mask", "no_noise", "full_mask"],
+        },
     )
 
 
@@ -490,8 +507,6 @@ class TranslationDATTask(TranslationTask):
         model.eval()
         with torch.no_grad():
             loss, sample_size, logging_output = criterion(model, sample)
-
-            EVAL_BLEU_ORDER = self.cfg.eval_bleu_order
 
             if self.cfg.eval_bleu:
                 bleu = self._inference_with_bleu(self.sequence_generator, sample, model)
