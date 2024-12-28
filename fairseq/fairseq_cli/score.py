@@ -28,14 +28,23 @@ def get_parser():
         '--ignore-case', action='store_true',
         help='case-insensitive scoring',
     )
+    parser.add_argument("--src-lang", default=None, metavar="SRC", help="source language")
+    parser.add_argument("--tgt-lang", default=None, metavar="TGT", help="target language")
     parser.add_argument(
         '--sacrebleu', action='store_true',
         help='score with sacrebleu',
     )
+    parser.add_argument("--sacrebleu-tokenizer", default=None, help="sacrebleu tokenizer (default: None)")
     parser.add_argument(
         '--sentence-bleu', action='store_true',
         help='report sentence-level BLEUs (i.e., with +1 smoothing)',
     )
+    parser.add_argument("--bert-score", action="store_true", help="score with bertscore")
+    parser.add_argument(
+        "--bert-score-type", default="F",
+        choices=["P", "R", "F"], help="bertscore type (default: F)",
+    )
+    parser.add_argument("--bert-score-rescale", action="store_true", help="rescale bertscore")
     # fmt: on
     return parser
 
@@ -58,23 +67,47 @@ def cli_main():
                 yield line
 
     if args.sacrebleu:
-        import sacrebleu
 
         def score(fdsys):
             with open(args.ref) as fdref:
-                print(sacrebleu.corpus_bleu(fdsys, [fdref]).format())
+                scorer = bleu.SacrebleuScorer(
+                    bleu.SacrebleuConfig(
+                        target_lang=args.tgt_lang,
+                        sacrebleu_tokenizer=args.sacrebleu_tokenizer,
+                    ),
+                )
+                for i, (sys_str, ref_str) in enumerate(zip(readlines(fdsys), readlines(fdref))):
+                    scorer.add_string(ref_str, sys_str)
+                print(scorer.result_string(args.order))
 
     elif args.sentence_bleu:
 
         def score(fdsys):
             with open(args.ref) as fdref:
-                scorer = bleu.Scorer(dict.pad(), dict.eos(), dict.unk())
+                scorer = bleu.Scorer(bleu.BleuConfig(pad=dict.pad(), eos=dict.eos(), unk=dict.unk()))
                 for i, (sys_tok, ref_tok) in enumerate(zip(readlines(fdsys), readlines(fdref))):
                     scorer.reset(one_init=True)
                     sys_tok = dict.encode_line(sys_tok)
                     ref_tok = dict.encode_line(ref_tok)
                     scorer.add(ref_tok, sys_tok)
                     print(i, scorer.result_string(args.order))
+
+    elif args.bert_score:
+
+        from fairseq.scoring import bertscore
+
+        def score(fdsys):
+            with open(args.ref) as fdref:
+                scorer = bertscore.BertScoreScorer(
+                    bertscore.BertScoreScorerConfig(
+                        bert_score_type=args.bert_score_type,
+                        bert_score_lang=args.tgt_lang,
+                        bert_score_rescale=args.bert_score_rescale,
+                    ),
+                )
+                for sys_str, ref_str in zip(readlines(fdsys), readlines(fdref)):
+                    scorer.add_string(ref_str, sys_str)
+                print(scorer.result_string())
 
     else:
 

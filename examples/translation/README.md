@@ -104,6 +104,31 @@ fairseq-score --sys /tmp/gen.out.sys --ref /tmp/gen.out.ref
 # BLEU4 = 40.83, 67.5/46.9/34.4/25.5 (BP=1.000, ratio=1.006, syslen=83262, reflen=82787)
 ```
 
+### New feature
+For scoring with tokenized BLEU in a -> En translation task:
+```
+grep ^H- /tmp/gen.out | cut -f3- > /tmp/gen.out.sys
+grep ^T- /tmp/gen.out | cut -f2- > /tmp/gen.out.ref
+fairseq-score --sys /tmp/gen.out.sys --ref /tmp/gen.out.ref --sacrebleu --sacrebleu-tokenizer none --tgt-lang en
+```
+Because we are already using tokenized sentences in this case, we specify the tokenizer as `none`.
+
+For scoring with sacreBLEU in a -> En translation task:
+```
+grep ^DH- /tmp/gen.out | cut -f3- > /tmp/gen.out.sys
+grep ^DT- /tmp/gen.out | cut -f2- > /tmp/gen.out.ref
+fairseq-score --sys /tmp/gen.out.sys --ref /tmp/gen.out.ref --sacrebleu --tgt-lang en
+```
+This will use detokenized sentences and automatically detect the tokenizer based on the `--tgt-lang`.
+
+For scoring with Bertscore in a -> En translation task:
+```
+grep ^DH- /tmp/gen.out | cut -f3- > /tmp/gen.out.sys
+grep ^DT- /tmp/gen.out | cut -f2- > /tmp/gen.out.ref
+fairseq-score --sys /tmp/gen.out.sys --ref /tmp/gen.out.ref --bert-score --bert-score-rescale --tgt-lang en
+```
+
+
 ## Training a new model
 
 ### IWSLT'14 German to English (Transformer)
