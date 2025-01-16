@@ -22,6 +22,7 @@ NOISE_CHOICES = ChoiceEnum(["random_delete", "random_mask", "no_noise", "full_ma
 @dataclass
 class TranslationLevenshteinConfig(TranslationConfig):
     noise: NOISE_CHOICES = field(default="random_delete", metadata={"help": "type of noise"})
+    prepend_bos: bool = field(default=True, metadata={"help": "right pad with bos"})
 
 
 @register_task("translation_lev", dataclass=TranslationLevenshteinConfig)
@@ -62,7 +63,7 @@ class TranslationLevenshteinTask(TranslationTask):
             max_target_positions=self.cfg.max_target_positions,
             shuffle=(split != "test"),
             pad_to_multiple=self.cfg.required_seq_len_multiple,
-            prepend_bos=True,
+            prepend_bos=self.cfg.prepend_bos,
         )
 
     def inject_noise(self, target_tokens):
