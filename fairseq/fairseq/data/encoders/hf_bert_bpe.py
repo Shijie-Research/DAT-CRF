@@ -5,7 +5,7 @@
 
 from dataclasses import dataclass, field
 
-from fairseq.data.encoders import register_bpe
+from fairseq.data.encoders import register_tokenizer
 from fairseq.dataclass import FairseqDataclass
 
 
@@ -15,7 +15,7 @@ class BertBPEConfig(FairseqDataclass):
     bert_model_name: str = field(default="bert-base-multilingual-cased", metadata={"help": "model name of huggingface"})
 
 
-@register_bpe("bert", dataclass=BertBPEConfig)
+@register_tokenizer("bert", dataclass=BertBPEConfig)
 class BertBPE(object):
     def __init__(self, cfg):
         try:
