@@ -108,7 +108,9 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             self.layers = LayerDropModuleList(p=self.decoder_layerdrop)
         else:
             self.layers = nn.ModuleList([])
-        self.layers.extend([self.build_decoder_layer(cfg, no_encoder_attn) for _ in range(cfg.decoder.layers)])
+        self.layers.extend(
+            [self.build_decoder_layer(cfg, no_encoder_attn, layer_idx=i) for i in range(cfg.decoder.layers)],
+        )
         self.num_layers = len(self.layers)
 
         if cfg.decoder.normalize_before and not cfg.no_decoder_final_norm:
@@ -156,7 +158,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                 BaseLayer(cfg),
             )
 
-    def build_decoder_layer(self, cfg, no_encoder_attn=False, layer=None):
+    def build_decoder_layer(self, cfg, no_encoder_attn=False, layer=None, layer_idx=None):
         cfg = TransformerConfig.from_namespace(cfg)
         if layer is None:
             layer = transformer_layer.TransformerDecoderLayerBase(cfg, no_encoder_attn)

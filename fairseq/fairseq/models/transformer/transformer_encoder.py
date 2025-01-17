@@ -85,7 +85,7 @@ class TransformerEncoderBase(FairseqEncoder):
             self.layers = LayerDropModuleList(p=self.encoder_layerdrop)
         else:
             self.layers = nn.ModuleList([])
-        self.layers.extend([self.build_encoder_layer(cfg) for i in range(cfg.encoder.layers)])
+        self.layers.extend([self.build_encoder_layer(cfg, layer_idx=i) for i in range(cfg.encoder.layers)])
         self.num_layers = len(self.layers)
 
         if cfg.encoder.normalize_before:
@@ -93,7 +93,7 @@ class TransformerEncoderBase(FairseqEncoder):
         else:
             self.layer_norm = None
 
-    def build_encoder_layer(self, cfg, layer=None):
+    def build_encoder_layer(self, cfg, layer=None, layer_idx=None):
         cfg = TransformerConfig.from_namespace(cfg)
         if layer is None:
             layer = transformer_layer.TransformerEncoderLayerBase(cfg, return_fc=self.return_fc)
