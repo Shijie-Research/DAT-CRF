@@ -144,6 +144,10 @@ class ConfigsDict(dict):
     def typed_get(self, key, dtype=str):
         return dtype(self[key])
 
+    @staticmethod
+    def to_config_dict(dict_):
+        return {"--" + k.replace("_", "-"): v for k, v in dict_.items()}
+
 
 CONFIGS = ConfigsDict()
 
@@ -245,12 +249,12 @@ class MetaClass:
         optimizer = CONFIGS.get("--optimizer")
         if optimizer:
             logger.warning(HeadLine.header(f"optimizer = {optimizer}", level=2))
-            CONFIGS.verbose_update(grouped_configs.pop(optimizer))
+            CONFIGS.verbose_update(CONFIGS.to_config_dict(grouped_configs.pop(optimizer)))
 
         lr_scheduler = CONFIGS.get("--lr-scheduler")
         if lr_scheduler:
             logger.warning(HeadLine.header(f"lr_scheduler = {lr_scheduler}", level=2))
-            CONFIGS.verbose_update(grouped_configs.pop(lr_scheduler))
+            CONFIGS.verbose_update(CONFIGS.to_config_dict(grouped_configs.pop(lr_scheduler)))
 
         model_overrides = {}
         if grouped_configs.get("--model-overrides", None) is not None:

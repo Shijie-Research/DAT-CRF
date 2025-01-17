@@ -38,13 +38,13 @@ class TransformerMOEIWSLT14(TranslationMOE):
                 "--report-accuracy": True,
                 # optimizer
                 "--optimizer": "adam",
-                "adam.--adam-betas": "0.9,0.98",
-                "adam.--adam-eps": "1e-8",
-                "adam.--weight-decay": "0.01",
+                "adam.adam_betas": "0.9,0.98",
+                "adam.adam_eps": "1e-8",
+                "adam.weight_decay": "0.01",
                 # lr_scheduler
                 "--lr-scheduler": "inverse_sqrt",
-                "inverse_sqrt.--warmup-updates": "4000",
-                "inverse_sqrt.--warmup-init-lr": "1e-7",
+                "inverse_sqrt.warmup_updates": "4000",
+                "inverse_sqrt.warmup_init_lr": "1e-7",
                 # dataset, 8K batch size assuming only one GPU
                 "--max-tokens": ("8192", "1024"),
                 "--update-freq": "1",
@@ -60,10 +60,6 @@ class TransformerMOEIWSLT14(TranslationMOE):
                 "--save-interval": "0",  # do not save at end_of_epoch
                 "--save-interval-updates": ("1000", "10"),
                 "--keep-interval-updates": "5",
-                # tokenizer
-                "--tokenizer": "moses",
-                "moses.source_lang": self.source_lang,
-                "moses.target_lang": self.target_lang,
             },
         )
         return configs
@@ -76,10 +72,6 @@ class TransformerMOEIWSLT14(TranslationMOE):
                 # generation
                 "--beam": "5",
                 "--lenpen": "1",
-                # tokenizer
-                "--tokenizer": "moses",
-                "moses.--source-lang": self.source_lang,
-                "moses.--target-lang": self.target_lang,
             },
         )
         return configs

@@ -110,11 +110,13 @@ class Translation(MetaClass):
                 CONFIGS.verbose_update(
                     {
                         "--eval-bleu-detok": tokenizer,
-                        "--eval-bleu-detok-args": json.dumps(grouped_configs.pop(tokenizer, {})),
+                        "--eval-bleu-detok-args": json.dumps(dataset_cls.TOKENIZER_CONFIGS),
                     },
                 )
             else:
-                CONFIGS.verbose_update({"--tokenizer": tokenizer, **grouped_configs.pop(tokenizer, {})})
+                CONFIGS.verbose_update(
+                    {"--tokenizer": tokenizer, **CONFIGS.to_config_dict(dataset_cls.TOKENIZER_CONFIGS)},
+                )
 
         bpe = dataset_cls.BPE
         if bpe is not None:

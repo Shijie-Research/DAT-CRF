@@ -31,13 +31,13 @@ class NATransformerIWSLT14(NATranslation):
                 "--label-smoothing": "0.1",
                 # optimizer
                 "--optimizer": "adam",
-                "adam.--adam-betas": "0.9,0.98",
-                "adam.--adam-eps": "1e-8",
-                "adam.--weight-decay": "0.01",
+                "adam.adam_betas": "0.9,0.98",
+                "adam.adam_eps": "1e-8",
+                "adam.weight_decay": "0.01",
                 # lr_scheduler
                 "--lr-scheduler": "inverse_sqrt",
-                "inverse_sqrt.--warmup-updates": "10000",
-                "inverse_sqrt.--warmup-init-lr": "1e-7",
+                "inverse_sqrt.warmup_updates": "10000",
+                "inverse_sqrt.warmup_init_lr": "1e-7",
                 # dataset
                 "--max-tokens": ("8192", "1024"),
                 "--update-freq": "1",
@@ -54,10 +54,6 @@ class NATransformerIWSLT14(NATranslation):
                 "--save-interval-updates": ("1000", "10"),
                 "--keep-interval-updates": "5",
                 "--patience": "20",
-                # tokenizer
-                "--tokenizer": "moses",
-                "moses.source_lang": self.source_lang,
-                "moses.target_lang": self.target_lang,
             },
         )
         return configs
@@ -71,10 +67,6 @@ class NATransformerIWSLT14(NATranslation):
                 "--task": "translation_lev",
                 "--iter-decode-max-iter": "1",
                 "--iter-decode-with-beam": "1",
-                # tokenizer
-                "--tokenizer": "moses",
-                "--source-lang": self.source_lang,
-                "--target-lang": self.target_lang,
             },
         )
         return configs

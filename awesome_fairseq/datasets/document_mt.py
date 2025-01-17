@@ -14,10 +14,15 @@ class DocumentMT(Dataset):
     NAME = "fairseq_document_deen"
     HF_PATH = "shijli/fairseq_document_deen"
     TOKENIZER = "moses"
+    TOKENIZER_CONFIGS = {}
     BPE = "subword_nmt"
+    BPE_CONFIGS = {}
 
     @classmethod
     def _load(cls, task: str, distilled=False, sep=False, doc=False, **kwargs):
+        src_lang, tgt_lang = task.split("_")[-2:]
+        cls.TOKENIZER_CONFIGS = {"source_lang": src_lang, "target_lang": tgt_lang}
+
         task += "-doc" if doc else "-sent"
 
         from datasets.config import HF_DATASETS_CACHE

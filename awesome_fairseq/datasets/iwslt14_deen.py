@@ -14,10 +14,15 @@ class IWSLT2014DEEN(Dataset):
     NAME = "fairseq_iwslt14_deen"
     HF_PATH = "shijli/fairseq_iwslt14_deen"
     TOKENIZER = "moses"
+    TOKENIZER_CONFIGS = {}
     BPE = "subword_nmt"
+    BPE_CONFIGS = {}
 
     @classmethod
     def _load(cls, task: str, distilled=False, sep=False, **kwargs):
+        src_lang, tgt_lang = task.split("_")[-2:]
+        cls.TOKENIZER_CONFIGS = {"source_lang": src_lang, "target_lang": tgt_lang}
+
         if distilled:
             task = task + "-distilled"
         else:
