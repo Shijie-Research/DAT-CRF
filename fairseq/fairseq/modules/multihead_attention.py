@@ -614,9 +614,13 @@ class MultiheadAttention(FairseqIncrementalDecoder):
         assert list(attn_weights.size()) == [bsz * self.num_heads, tgt_len, src_len]
 
         if attn_mask is not None:
-            attn_mask = attn_mask.unsqueeze(0)
-            if self.onnx_trace:
-                attn_mask = attn_mask.repeat(attn_weights.size(0), 1, 1)
+            if attn_mask.ndim == 3:
+                assert attn_mask.size(0) == bsz
+                attn_mask = attn_mask.unsqueeze(1).repeat(1, self.num_heads, 1, 1).view(-1, tgt_len, src_len)
+            else:
+                attn_mask = attn_mask.unsqueeze(0)
+                if self.onnx_trace:
+                    attn_mask = attn_mask.repeat(attn_weights.size(0), 1, 1)
             attn_weights += attn_mask
 
         if key_padding_mask is not None:
