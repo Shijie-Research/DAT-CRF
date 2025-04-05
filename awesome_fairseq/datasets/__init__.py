@@ -47,6 +47,7 @@ class Dataset:
             **kwargs,
             token=True,
             cache_dir=HF_DATASETS_CACHE,
+            trust_remote_code=True,
         )
 
         download_config = datasets.DownloadConfig(

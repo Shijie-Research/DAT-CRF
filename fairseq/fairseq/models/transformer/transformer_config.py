@@ -39,6 +39,20 @@ class EncDecBaseConfig(FairseqDataclass):
         default=None,
         metadata={"help": "config for xFormers attention, defined in xformers.components.attention.AttentionConfig"},
     )
+    layers_to_share: Optional[List[int]] = field(
+        default=None,
+        metadata={"help": "layer index to build shared layers, e.g., 1,1,2,2,3,3"},
+    )
+    return_attns: bool = field(default=False, metadata={"help": "whether to return attention weights"})
+    return_head_attns: bool = field(default=False, metadata={"help": "whether to return attention head weights"})
+
+
+@dataclass
+class EncoderConfig(EncDecBaseConfig):
+    max_positions: int = field(
+        default=DEFAULT_MAX_SOURCE_POSITIONS,
+        metadata={"help": "Maximum input length supported by the encoder"},
+    )
 
 
 @dataclass
@@ -47,6 +61,10 @@ class DecoderConfig(EncDecBaseConfig):
     output_dim: int = field(
         default=II("model.decoder.embed_dim"),
         metadata={"help": "decoder output dimension (extra linear layer if different from decoder embed dim)"},
+    )
+    max_positions: int = field(
+        default=DEFAULT_MAX_TARGET_POSITIONS,
+        metadata={"help": "Maximum output length supported by the decoder"},
     )
 
     def __post_init__(self):
@@ -89,7 +107,7 @@ class TransformerConfig(FairseqDataclass):
         },
     )
     adaptive_input: bool = False
-    encoder: EncDecBaseConfig = EncDecBaseConfig()
+    encoder: EncDecBaseConfig = EncoderConfig()
     # TODO should really be in the encoder config
     max_source_positions: int = field(
         default=DEFAULT_MAX_SOURCE_POSITIONS,
@@ -257,7 +275,7 @@ class TransformerConfig(FairseqDataclass):
                         seen.add("encoder")
                         for key in args.encoder.keys():
                             seen.add(f"encoder_{key}")
-                        config.encoder = EncDecBaseConfig(**args.encoder)
+                        config.encoder = EncoderConfig(**args.encoder)
                     else:
                         config.encoder = cls._copy_keys(args, EncDecBaseConfig, "encoder", seen)
                 elif fld.name == "quant_noise":
