@@ -169,7 +169,7 @@ class DACRFTransformerModel(NATransformerModel):
         parser.add_argument(
             "--decode-strategy",
             type=str,
-            default="viterbi",
+            default="lookahead",
             choices=decode_strategy,
             help="Decoding strategy to use.",
         )
@@ -474,9 +474,9 @@ class DACRFTransformerModel(NATransformerModel):
 
         bsz_idx = torch.arange(bsz).unsqueeze(-1).expand(-1, tgt_len)
         emission_lprobs = emission_lprobs[bsz_idx, best_alignment]
-        transit_lprobs = transit_lprobs[bsz_idx[:, :-1], best_alignment[:, :-1], best_alignment[:, 1:]]
+        # transit_lprobs = transit_lprobs[bsz_idx[:, :-1], best_alignment[:, :-1], best_alignment[:, 1:]]
 
-        emission_lprobs[:, 1:] += transit_lprobs.unsqueeze(-1)
+        # emission_lprobs[:, 1:] += transit_lprobs.unsqueeze(-1)
 
         numerator = self._compute_dacrf_numerator(emission_lprobs, target_tokens, target_mask)
         denominator = self._compute_dacrf_denominator(emission_lprobs, target_tokens, target_mask)
@@ -599,7 +599,7 @@ class DACRFTransformerModel(NATransformerModel):
         elif self.args.decode_strategy == "beamsearch":
             inference_cls = self._inference_beamsearch
 
-        elif self.args.decode_strategy == "full_crf":
+        elif self.args.decode_strategy == "full-crf":
             inference_cls = self._inference_full_crf
 
         else:
@@ -612,7 +612,7 @@ class DACRFTransformerModel(NATransformerModel):
             decoder_out.output_tokens,
         )
 
-        if getattr(self.args, "crf_decoding", False) and self.args.decode_strategy not in ["full_crf", "beamsearch"]:
+        if getattr(self.args, "crf_finetuning", False) and self.args.decode_strategy not in ["full-crf", "beamsearch"]:
             output_tokens = self._inference_crf(output_tokens, emission_lprobs, transit_lprobs, output_aligns)
 
         if history is not None:
@@ -898,16 +898,11 @@ class DACRFTransformerModel(NATransformerModel):
             )
             return output_tokens.to(prev_output_tokens.device), output_scores.to(prev_output_tokens.device), None
 
-    def _inference_full_crf(self, encoder_out, prev_output_tokens):
+    def _inference_full_crf(self, emission_lprobs, transit_lprobs, prev_output_tokens, target_tokens):
         bsz, pre_len = prev_output_tokens.size()
         beam_size = self.args.crf_decode_beam
 
         prev_output_mask = prev_output_tokens.ne(self.pad)
-
-        emission_scores, features = self.extract_features(encoder_out, prev_output_tokens)
-        emission_lprobs = F.log_softmax(emission_scores, dim=-1)
-
-        transit_lprobs = self.decoder.compute_transit_lprobs(features, prev_output_tokens)
 
         beam_lprobs, beam_tokens = emission_lprobs.topk(beam_size, dim=-1)
         dag_lprobs = beam_lprobs[:, None, :, :] + transit_lprobs[:, :, :, None]

@@ -40,6 +40,8 @@ class TransformerEncoderLayerBase(nn.Module):
         self.quant_noise = cfg.quant_noise.pq
         self.quant_noise_block_size = cfg.quant_noise.pq_block_size
         self.self_attn = self.build_self_attention(self.embed_dim, cfg)
+        self.nh = self.self_attn.num_heads
+        self.head_dim = self.self_attn.head_dim
         self.self_attn_layer_norm = LayerNorm(self.embed_dim, export=cfg.export)
         self.dropout_module = FairseqDropout(cfg.dropout, module_name=self.__class__.__name__)
         self.activation_fn = utils.get_activation_fn(activation=cfg.activation_fn)
@@ -180,8 +182,8 @@ class TransformerEncoderLayerBase(nn.Module):
         # Note that we cannot use -inf here, because at some edge cases,
         # the attention weight (before softmax) for some padded element in query
         # will become -inf, which results in NaN in model parameters
-        if attn_mask is not None:
-            attn_mask = attn_mask.masked_fill(attn_mask.to(torch.bool), -1e8 if x.dtype == torch.float32 else -1e4)
+        # if attn_mask is not None:  # TODO, is it safe to remove this line
+        #     attn_mask = attn_mask.masked_fill(attn_mask.to(torch.bool), -1e8 if x.dtype == torch.float32 else -1e4)
 
         residual = x
         if self.normalize_before:
