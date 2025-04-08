@@ -129,15 +129,18 @@ class DACRFTransformerIWSLT14(NATransformerIWSLT14):
                     "--decode-strategy": "lookahead",
                     "--no-strict-model-load": True,
                     "--length-loss-factor": "0.0",
-                    "--lr": "5e-5",
-                    "inverse_sqrt.warmup_updates": "5000",
-                    "--max-update": ("30000", "20"),
+                    "--lr": "5e-4",
+                    "--lr-scheduler": "polynomial_decay",
+                    "polynomial_decay.warmup_updates": "0",
+                    "polynomial_decay.end_learning_rate": "1e-4",
+                    "polynomial_decay.total_num_update": "{max_update}",
+                    "--max-update": ("50000", "20"),
                     "--validate-interval-updates": ("1000", "10"),
                     "--save-interval-updates": ("1000", "10"),
                     "--crf-lowrank-approx": "64",
                     "--crf-beam-approx": "64",
-                    "--crf-decode-beam": "8",
-                    "--patience": "10",
+                    "--crf-decode-beam": "4",
+                    "--patience": "5",
                 },
             )
         return configs
@@ -145,7 +148,7 @@ class DACRFTransformerIWSLT14(NATransformerIWSLT14):
     def save_dir(self, task=None, model=None):
         save_dir = super().save_dir(task=task, model=model or "dacrf_transformer")
         if "finetune" in self.model:
-            save_dir = os.path.join(save_dir, "finetune")
+            save_dir = os.path.join(save_dir, "finetune" + CONFIGS.pop("--finetune-suffix", ""))
         return save_dir
 
     @property
@@ -155,9 +158,9 @@ class DACRFTransformerIWSLT14(NATransformerIWSLT14):
             {
                 "--model-overrides.glance_p": None,
                 "--model-overrides.crf_finetuning": "finetune" in self.model,
-                "--model-overrides.decode_alpha@float": "1.1",
+                "--model-overrides.decode_alpha@float": "1.0",
                 "--model-overrides.decode_beta@int": "1",
-                "--model-overrides.upsample_scale@int": "2",
+                "--model-overrides.crf_decode_beam@int": "4",
                 # parameters for beamsearch
                 "--model-overrides.decode_max_workers@int": "0",
                 "--model-overrides.decode_max_beam_per_length@int": "10",
@@ -174,47 +177,18 @@ class DACRFTransformerIWSLT14(NATransformerIWSLT14):
         return configs
 
 
-@register_dacrf_transformer("wmt16_en_ro", "wmt16_ro_en")
-class DACRFTransformerWMT16(DACRFTransformerIWSLT14):
-    @property
-    def train_configs(self):
-        configs = super().train_configs
-        configs.update(
-            {
-                # model
-                "--arch": "dacrf_transformer_wmt_en_de",
-                "--dropout": "0.3",
-                # dataset, 32K batch size assuming only one GPU
-                "--max-tokens": ("16384", "1024"),
-                # optimization
-                "--update-freq": ("2", "1"),
-            },
-        )
-        return configs
-
-
-@register_dacrf_transformer("wmt14_de_en", "wmt14_en_de")
-class DACRFTransformerWMT14(DACRFTransformerIWSLT14):
-    @property
-    def train_configs(self):
-        configs = super().train_configs
-        configs.update(
-            {
-                # model
-                "--arch": "dacrf_transformer_wmt_en_de",
-                "--dropout": "0.1",
-                # dataset, 64K batch size assuming only one GPU
-                "--max-tokens": ("16384", "1024"),
-                "--update-freq": ("4", "1"),
-            },
-        )
-        if "finetune" not in self.model:
-            configs.update({"--lr": "7e-4"})
-        return configs
-
-
 @register_dacrf_transformer("iwslt17_en_de", "nc2016_en_de", "europarl7_en_de")
 class DACRFTransformerSent(DACRFTransformerIWSLT14):
+    def _post_process_configs(self, grouped_configs):
+        if self.task == "europarl7_en_de" and self.run_type == "train":
+            if CONFIGS.typed_get("--upsample-scale", dtype=int) == 8:
+                # 8192 token cannot be trained with a 48G GPU. So pity.
+                CONFIGS.verbose_update({"--max-tokens": "4096", "--update-freq": "4", "--dropout": "0.2"})
+            else:
+                CONFIGS.verbose_update({"--max-tokens": "16384", "--update-freq": "1", "--dropout": "0.2"})
+
+        # go to parent
+        super()._post_process_configs(grouped_configs)
 
     @property
     def train_configs(self):
@@ -227,14 +201,6 @@ class DACRFTransformerSent(DACRFTransformerIWSLT14):
                 "--arch": "dacrf_transformer_wmt_en_de",
             },
         )
-        if "europarl7" in self.task:
-            configs.update(
-                {
-                    "--max-tokens": ("16384", "1024"),
-                    "--dropout": "0.2",
-                },
-            )
-
         return configs
 
     @property
@@ -251,6 +217,9 @@ class DACRFTransformerSent(DACRFTransformerIWSLT14):
 
 @register_dacrf_transformer("iwslt17_en_zh", "iwslt17_zh_en")
 class DACRFTransformerIWSLT17(DACRFTransformerIWSLT14):
+    def __init__(self, *, task, remaining_args, **kwargs):
+        remaining_args.append("--data-sep")
+        super().__init__(task=task, remaining_args=remaining_args, **kwargs)
 
     @property
     def train_configs(self):
@@ -263,6 +232,62 @@ class DACRFTransformerIWSLT17(DACRFTransformerIWSLT14):
                 "--share-decoder-input-output-embed": True,
             },
         )
+        return configs
+
+
+@register_dacrf_transformer("wmt16_en_ro", "wmt16_ro_en")
+class DACRFTransformerWMT16(DACRFTransformerIWSLT14):
+    def _post_process_configs(self, grouped_configs):
+        if self.run_type == "train":
+            if CONFIGS.typed_get("--upsample-scale", dtype=int) == 8:
+                # 8192 token cannot be trained with a 48G GPU. So pity.
+                CONFIGS.verbose_update({"--max-tokens": "4096", "--update-freq": "8"})
+            else:
+                # dataset, 32K batch size assuming only one GPU
+                CONFIGS.verbose_update({"--max-tokens": "16384", "--update-freq": "2"})
+
+        # go to parent
+        super()._post_process_configs(grouped_configs)
+
+    @property
+    def train_configs(self):
+        configs = super().train_configs
+        configs.update(
+            {
+                # model
+                "--arch": "dacrf_transformer_wmt_en_de",
+                "--dropout": "0.3",
+            },
+        )
+        return configs
+
+
+@register_dacrf_transformer("wmt14_de_en", "wmt14_en_de")
+class DACRFTransformerWMT14(DACRFTransformerIWSLT14):
+    def _post_process_configs(self, grouped_configs):
+        if self.run_type == "train":
+            if CONFIGS.typed_get("--upsample-scale", dtype=int) == 8:
+                # 8192 token cannot be trained with a 48G GPU. So pity.
+                CONFIGS.verbose_update({"--max-tokens": "4096", "--update-freq": "8"})
+            else:
+                # dataset, 32K batch size assuming only one GPU
+                CONFIGS.verbose_update({"--max-tokens": "16384", "--update-freq": "2"})
+
+        # go to parent
+        super()._post_process_configs(grouped_configs)
+
+    @property
+    def train_configs(self):
+        configs = super().train_configs
+        configs.update(
+            {
+                # model
+                "--arch": "dacrf_transformer_wmt_en_de",
+                "--dropout": "0.1",
+            },
+        )
+        if "finetune" not in self.model:
+            configs.update({"--lr": "7e-4"})
         return configs
 
 

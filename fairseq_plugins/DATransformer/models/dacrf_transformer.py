@@ -181,9 +181,10 @@ class DACRFTransformerModel(NATransformerModel):
         )
         # used for CRF finetuning
         parser.add_argument("--crf-finetuning", action="store_true", help="Only finetuning the CRF layer.")
-        parser.add_argument("--crf-decoding", action="store_true", help="Enable CRF decoding.")
+        parser.add_argument("--crf-dropout", type=float, default=0.1, help="Dropout rate for CRF layer.")
+        parser.add_argument("--crf-disabled", action="store_true", help="Disable CRF decoding.")
         parser.add_argument("--crf-lowrank-approx", type=int, default=64, help="Low-rank approximation for CRF layer.")
-        parser.add_argument("--crf-beam-approx", type=int, default=8, help="Beam size for the CRF normalizing factor")
+        parser.add_argument("--crf-beam-approx", type=int, default=64, help="Beam size for the CRF normalizing factor")
         parser.add_argument("--crf-decode-beam", type=int, default=8, help="Beam size for CRF decoding")
 
         # decode arguments
@@ -364,9 +365,9 @@ class DACRFTransformerModel(NATransformerModel):
         # in this case, input length was determinate by the upsample scale
         # to avoid adding too many padding tokens, we use the same scale for all sentences
         if getattr(self.args, "upsample_target", False):
-            length_tgt = tgt_tokens.ne(self.pad).sum(1) * self.args.upsample_scale
+            length_tgt = tgt_tokens.ne(self.pad).sum(1) * int(self.args.upsample_scale)
         else:
-            length_tgt = src_lengths * self.args.upsample_scale
+            length_tgt = src_lengths * int(self.args.upsample_scale)
 
         prev_output_tokens = self.initialize_output_tokens(encoder_out, src_tokens, length_tgt).output_tokens
 
@@ -493,6 +494,10 @@ class DACRFTransformerModel(NATransformerModel):
         E1 = self.crf_embed_query(targets[:, :-1]).view(-1, lowrank)
         E2 = self.crf_embed_key(targets[:, 1:]).view(-1, lowrank)
 
+        if self.training:
+            E1 = F.dropout(E1, p=self.args.crf_dropout, training=True)
+            E2 = F.dropout(E2, p=self.args.crf_dropout, training=True)
+
         crf_scores = (E1 * E2).sum(1).view(emission_scores.size(0), -1)
 
         emission_scores[:, 1:] += crf_scores
@@ -513,6 +518,10 @@ class DACRFTransformerModel(NATransformerModel):
 
         E1 = self.crf_embed_query(beam_targets[:, :-1]).view(-1, beam, lowrank)
         E2 = self.crf_embed_key(beam_targets[:, 1:]).view(-1, beam, lowrank)
+
+        if self.training:
+            E1 = F.dropout(E1, p=self.args.crf_dropout, training=True)
+            E2 = F.dropout(E2, p=self.args.crf_dropout, training=True)
 
         beam_crf_matrix = torch.bmm(E1, E2.transpose(1, 2)).view(bsz, -1, beam, beam)
 
@@ -561,7 +570,7 @@ class DACRFTransformerModel(NATransformerModel):
 
     def forward_decoder(self, decoder_out, encoder_out, src_tokens=None, decoding_format=None, **kwargs):
         upsample_target = getattr(self.args, "upsample_target", False)
-        if upsample_target and self.args.upsample_scale == 1:
+        if upsample_target and int(self.args.upsample_scale) == 1:
             return super().forward_decoder(
                 decoder_out,
                 encoder_out,
@@ -573,9 +582,9 @@ class DACRFTransformerModel(NATransformerModel):
         history = decoder_out.history
 
         if getattr(self.args, "upsample_target", False):
-            length_tgt = decoder_out.output_tokens.ne(self.pad).sum(1) * self.args.upsample_scale
+            length_tgt = decoder_out.output_tokens.ne(self.pad).sum(1) * int(self.args.upsample_scale)
         else:
-            length_tgt = src_tokens.ne(self.pad).sum(1) * self.args.upsample_scale
+            length_tgt = src_tokens.ne(self.pad).sum(1) * int(self.args.upsample_scale)
 
         output_tokens = self.initialize_output_tokens(encoder_out, src_tokens, length_tgt).output_tokens
 
@@ -612,7 +621,7 @@ class DACRFTransformerModel(NATransformerModel):
             decoder_out.output_tokens,
         )
 
-        if getattr(self.args, "crf_finetuning", False) and self.args.decode_strategy not in ["full-crf", "beamsearch"]:
+        if getattr(self.args, "crf_finetuning", False) and not getattr(self.args, "crf_disabled", False):
             output_tokens = self._inference_crf(output_tokens, emission_lprobs, transit_lprobs, output_aligns)
 
         if history is not None:
@@ -938,11 +947,7 @@ class DACRFTransformerModel(NATransformerModel):
         )
         eos_lprobs = eos_lprobs[:, :, 0]
 
-        lengths_penalty = utils.new_arange(prev_output_tokens, pre_len - 1) + 2
-        lengths_penalty = lengths_penalty**self.args.decode_alpha
-        lengths_penalty = lengths_penalty.unsqueeze(-1).expand(-1, bsz)
-
-        eos_lprobs = eos_lprobs / lengths_penalty
+        eos_lprobs = eos_lprobs / self.length_penalty[2 : pre_len + 1].unsqueeze(1)
 
         max_scores, length = eos_lprobs.max(dim=0)
         length += 2
@@ -981,7 +986,7 @@ class DACRFTransformerModel(NATransformerModel):
         output_tokens = beam_tokens[bsz_idx.expand(*best_beam.shape), best_traj, best_beam]
         output_lprobs = beam_lprobs[bsz_idx.expand(*best_beam.shape), best_traj, best_beam]
 
-        return output_tokens, output_lprobs
+        return output_tokens, output_lprobs, None
 
     def upgrade_state_dict_named(self, state_dict, name):
         super().upgrade_state_dict_named(state_dict, name)

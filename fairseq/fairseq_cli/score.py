@@ -8,11 +8,14 @@ BLEU scoring of generated translations against reference translations.
 """
 
 import argparse
+import logging
 import os
 import sys
 
 from fairseq.data import dictionary
 from fairseq.scoring import bleu
+
+logger = logging.getLogger(__name__)
 
 
 def get_parser():
@@ -52,7 +55,7 @@ def get_parser():
 def cli_main():
     parser = get_parser()
     args = parser.parse_args()
-    print(args)
+    logger.info(args)
 
     assert args.sys == "-" or os.path.exists(args.sys), "System output file {} does not exist".format(args.sys)
     assert os.path.exists(args.ref), "Reference file {} does not exist".format(args.ref)
