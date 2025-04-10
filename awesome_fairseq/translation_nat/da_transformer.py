@@ -301,6 +301,12 @@ class DACRFTransformerDoc(DACRFTransformerIWSLT14):
         self.is_global = getattr(parsed, "global", False)
         super().__init__(task=task.split("-")[0], remaining_args=remaining_args, **kwargs)
 
+    def _post_process_configs(self, grouped_configs):
+        CONFIGS.verbose_update({"--max-target-positions": str(512 * CONFIGS.typed_get("--upsample-scale", dtype=int))})
+
+        # go to parent
+        super()._post_process_configs(grouped_configs)
+
     @property
     def train_configs(self):
         configs = super().train_configs
@@ -324,11 +330,13 @@ class DACRFTransformerDoc(DACRFTransformerIWSLT14):
             },
         )
         if "europarl7" in self.task:
-            configs = {
-                "--max-tokens": "2048",
-                "--update-freq": "8",
-                "--dropout": "0.2",
-            }
+            configs.update(
+                {
+                    "--max-tokens": "2048",
+                    "--update-freq": "8",
+                    "--dropout": "0.2",
+                },
+            )
         return configs
 
     @property

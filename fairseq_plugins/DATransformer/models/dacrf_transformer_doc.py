@@ -127,6 +127,21 @@ class GroupDACRFTransformerModel(DACRFTransformerModel):
             decoder.apply(init_bert_params)
         return decoder
 
+    def initialize_output_tokens(self, encoder_out, src_tokens, length_tgt=None):
+        # length prediction
+        length_tgt = src_tokens.ne(self.pad).sum(-1) * self.args.upsample_scale
+        decoder_out = super().initialize_output_tokens(encoder_out, src_tokens, length_tgt=length_tgt)
+        prev_output_tokens = decoder_out.output_tokens
+
+        # scatter the bos and eos tokens into right positions
+        src_segment_mask = get_segment_mask(encoder_out["segment_ids"][0])
+        src_lengs = (src_segment_mask.sum(-1) * self.args.upsample_scale).long().cumsum(-1)
+        bos_indices = src_lengs.masked_fill(src_lengs == src_lengs.max(-1, keepdim=True)[0], 0)
+
+        prev_output_tokens = prev_output_tokens.scatter(1, bos_indices, self.bos)
+        prev_output_tokens = prev_output_tokens.scatter(1, src_lengs - 1, self.eos)
+        return decoder_out._replace(output_tokens=prev_output_tokens)
+
     def extract_features(self, encoder_out, prev_output_tokens, **kwargs):
         source_segment_ids = encoder_out["segment_ids"][0]
         target_segment_ids = self.decoder.get_segment_ids(
@@ -146,26 +161,27 @@ class GroupDACRFTransformerModel(DACRFTransformerModel):
 
     @torch.no_grad()
     def get_best_alignment(self, encoder_out, prev_output_tokens, target_tokens):
-        prev_output_mask = prev_output_tokens.ne(self.pad)
-
         emission_scores, features = self.extract_features(encoder_out, prev_output_tokens)
         emission_lprobs = F.log_softmax(emission_scores, dim=-1)
 
         transit_lprobs = self.decoder.compute_transit_lprobs(features, prev_output_tokens)
 
-        # convert the prev_output_tokens and emission_scores into segment version
-        prev_segment_ids = self.decoder.get_segment_ids(prev_output_tokens, padding_mask=~prev_output_mask)
+        # step 1: convert the prev_output_tokens and emission_lprobs into segment version
+        prev_segment_ids = self.decoder.get_segment_ids(
+            prev_output_tokens,
+            padding_mask=prev_output_tokens.eq(self.pad),
+        )
         prev_segment_mask = get_segment_mask(prev_segment_ids)
         prev_sent_lens = get_sent_lens(prev_segment_mask)
 
-        emission_scores, prev_output_tokens = expand_segment_dim(prev_segment_mask, emission_scores, prev_output_tokens)
+        emission_lprobs, prev_output_tokens = expand_segment_dim(prev_segment_mask, emission_lprobs, prev_output_tokens)
 
-        assert prev_output_tokens.size(0) == emission_scores.size(0) == prev_sent_lens.sum()
+        assert prev_output_tokens.size(0) == emission_lprobs.size(0) == prev_sent_lens.sum()
 
-        emission_scores = pad_to_new_tensor(emission_scores, prev_sent_lens, pad=0)
+        emission_lprobs = pad_to_new_tensor(emission_lprobs, prev_sent_lens, pad=0)
         prev_output_tokens = pad_to_new_tensor(prev_output_tokens, prev_sent_lens, pad=self.pad)
 
-        # convert the target_tokens into segment version
+        # step 2: convert the target_tokens into segment version
         tgt_segment_ids = self.decoder.get_segment_ids(target_tokens, padding_mask=target_tokens.eq(self.pad))
         tgt_segment_mask = get_segment_mask(tgt_segment_ids)
         tgt_sent_lens = get_sent_lens(tgt_segment_mask)
@@ -183,61 +199,41 @@ class GroupDACRFTransformerModel(DACRFTransformerModel):
         prev_output_mask = prev_output_tokens.ne(self.pad)
         nonspecial_mask = prev_output_mask & prev_output_tokens.ne(self.bos) & prev_output_tokens.ne(self.eos)
 
-        emission_lprobs = F.log_softmax(emission_scores, dim=-1)
-        emission_lprobs = emission_lprobs.gather(2, target_tokens[:, None, :].expand(-1, pre_len, -1))
+        best_alignment = get_best_alignment(
+            emission_lprobs.gather(2, target_tokens[:, None, :].expand(-1, pre_len, -1)),
+            transit_lprobs,
+            prev_output_mask,
+            target_mask,
+        )
 
-        best_alignment = get_best_alignment(emission_lprobs, transit_lprobs, prev_output_mask, target_mask)
-
-        return emission_lprobs, best_alignment
+        return (
+            emission_lprobs,
+            best_alignment,
+            # previous_tokens
+            prev_segment_ids,
+            prev_sent_lens,
+            prev_output_tokens,
+            target_tokens,
+            (target_mask, prev_output_mask, nonspecial_mask),
+        )
 
     @torch.no_grad()
     def glancing_sampling(self, encoder_out, prev_output_tokens, target_tokens, glat_p):
         prev_output_tokens_clone = prev_output_tokens.clone()
 
-        emission_scores, features = self.extract_features(encoder_out, prev_output_tokens)
-
-        transit_lprobs = self.decoder.compute_transit_lprobs(features, prev_output_tokens)
-
-        # convert the prev_output_tokens and emission_scores into segment version
-        prev_segment_ids = self.decoder.get_segment_ids(
+        (
+            emission_lprobs,
+            best_alignment,
+            prev_segment_ids,
+            prev_sent_lens,
             prev_output_tokens,
-            padding_mask=prev_output_tokens.eq(self.pad),
-        )
-        prev_segment_mask = get_segment_mask(prev_segment_ids)
-        prev_sent_lens = get_sent_lens(prev_segment_mask)
-
-        emission_scores, prev_output_tokens = expand_segment_dim(prev_segment_mask, emission_scores, prev_output_tokens)
-
-        assert prev_output_tokens.size(0) == emission_scores.size(0) == prev_sent_lens.sum()
-
-        emission_scores = pad_to_new_tensor(emission_scores, prev_sent_lens, pad=0)
-        prev_output_tokens = pad_to_new_tensor(prev_output_tokens, prev_sent_lens, pad=self.pad)
-
-        # convert the target_tokens into segment version
-        tgt_segment_ids = self.decoder.get_segment_ids(target_tokens, target_tokens.eq(self.pad))
-        tgt_segment_mask = get_segment_mask(tgt_segment_ids)
-        tgt_sent_lens = get_sent_lens(tgt_segment_mask)
-
-        target_tokens = expand_segment_dim(tgt_segment_mask, target_tokens)
-
-        assert target_tokens.size(0) == tgt_sent_lens.sum()
-
-        target_tokens = pad_to_new_tensor(target_tokens, tgt_sent_lens, pad=self.pad)
+            target_tokens,
+            (target_mask, prev_output_mask, nonspecial_mask),
+        ) = self.get_best_alignment(encoder_out, prev_output_tokens, target_tokens)
 
         # normal glancing function
-        bsz, pre_len = prev_output_tokens.size()
-
-        target_mask = target_tokens.ne(self.pad)
-        prev_output_mask = prev_output_tokens.ne(self.pad)
-        nonspecial_mask = prev_output_mask & prev_output_tokens.ne(self.bos) & prev_output_tokens.ne(self.eos)
-
-        oracle_predictions = emission_scores.max(dim=-1)[1]
+        oracle_predictions = emission_lprobs.max(dim=-1)[1]
         oracle_predictions = torch.where(nonspecial_mask, oracle_predictions, prev_output_tokens)
-
-        emission_lprobs = F.log_softmax(emission_scores, dim=-1)
-        emission_lprobs = emission_lprobs.gather(2, target_tokens[:, None, :].expand(-1, pre_len, -1))
-
-        best_alignment = get_best_alignment(emission_lprobs, transit_lprobs, prev_output_mask, target_mask)
 
         scattered_predictions = oracle_predictions.scatter(1, best_alignment, target_tokens)
         scattered_predictions = torch.where(nonspecial_mask, scattered_predictions, prev_output_tokens)
@@ -255,28 +251,13 @@ class GroupDACRFTransformerModel(DACRFTransformerModel):
         glat_prev_output_tokens = scattered_predictions.clone()
         glat_prev_output_tokens[keep_mask] = prev_output_tokens[keep_mask]
 
-        total = (target_mask.sum(-1) - 2).sum()
-        n_correct = total - unmatched_num.sum()
-        glat_info = {"_glat@total": utils.item(total), "_glat@n_correct": utils.item(n_correct)}
+        total = utils.item((target_mask.sum(-1) - 2).sum())
+        n_correct = total - utils.item(unmatched_num.sum())
+        glat_info = {"glat_total": total, "glat_correct": n_correct, "glat_p": glat_p}
 
         scatter_to_tensor(prev_output_tokens_clone, glat_prev_output_tokens, prev_segment_ids, prev_sent_lens)
 
-        return prev_output_tokens_clone, glat_info, best_alignment
-
-    def initialize_output_tokens(self, encoder_out, src_tokens, length_tgt=None):
-        # length prediction
-        length_tgt = src_tokens.ne(self.pad).sum(-1) * self.args.upsample_scale
-        decoder_out = super().initialize_output_tokens(encoder_out, src_tokens, length_tgt=length_tgt)
-        prev_output_tokens = decoder_out.output_tokens
-
-        # scatter the bos and eos tokens into right positions
-        src_segment_mask = get_segment_mask(encoder_out["segment_ids"][0])
-        src_lengs = (src_segment_mask.sum(-1) * self.args.upsample_scale).long().cumsum(-1)
-        bos_indices = src_lengs.masked_fill(src_lengs == src_lengs.max(-1, keepdim=True)[0], 0)
-
-        prev_output_tokens = prev_output_tokens.scatter(1, bos_indices, self.bos)
-        prev_output_tokens = prev_output_tokens.scatter(1, src_lengs - 1, self.eos)
-        return decoder_out._replace(output_tokens=prev_output_tokens)
+        return prev_output_tokens_clone, glat_info
 
     def forward(self, src_tokens, src_lengths, prev_output_tokens, tgt_tokens, **kwargs):
         # encoding
@@ -286,21 +267,22 @@ class GroupDACRFTransformerModel(DACRFTransformerModel):
 
         glat_p = get_anneal_value(self.glat_scheduler, self.get_num_updates())
         if glat_p > 0:
-            prev_output_tokens, self.glat_info, best_alignment = self.glancing_sampling(
+            prev_output_tokens, self.glat_info = self.glancing_sampling(
                 encoder_out,
                 prev_output_tokens=prev_output_tokens,
                 target_tokens=tgt_tokens,
                 glat_p=glat_p,
             )
         else:
-            best_alignment = self.get_best_alignment(encoder_out, prev_output_tokens, tgt_tokens)
             self.glat_info = {}
 
         # decoding
         emission_scores, features = self.extract_features(encoder_out, prev_output_tokens)
+        emission_lprobs = F.log_softmax(emission_scores, dim=-1)
+
         transit_lprobs = self.decoder.compute_transit_lprobs(features, prev_output_tokens)
 
-        # convert the prev_output_tokens and emission_scores into segment version
+        # step 1: convert the prev_output_tokens and emission_lprobs into segment version
         prev_segment_ids = self.decoder.get_segment_ids(
             prev_output_tokens,
             padding_mask=prev_output_tokens.eq(self.pad),
@@ -308,14 +290,14 @@ class GroupDACRFTransformerModel(DACRFTransformerModel):
         prev_segment_mask = get_segment_mask(prev_segment_ids)
         prev_sent_lens = get_sent_lens(prev_segment_mask)
 
-        emission_scores, prev_output_tokens = expand_segment_dim(prev_segment_mask, emission_scores, prev_output_tokens)
+        emission_lprobs, prev_output_tokens = expand_segment_dim(prev_segment_mask, emission_lprobs, prev_output_tokens)
 
-        assert emission_scores.size(0) == prev_output_tokens.size(0) == prev_sent_lens.sum()
+        assert emission_lprobs.size(0) == prev_output_tokens.size(0) == prev_sent_lens.sum()
 
-        emission_scores = pad_to_new_tensor(emission_scores, prev_sent_lens, pad=0)
+        emission_lprobs = pad_to_new_tensor(emission_lprobs, prev_sent_lens, pad=0)
         prev_output_tokens = pad_to_new_tensor(prev_output_tokens, prev_sent_lens, pad=self.pad)
 
-        # convert the target_tokens into segment version
+        # step 2: convert the target_tokens into segment version
         tgt_segment_ids = self.decoder.get_segment_ids(tgt_tokens, padding_mask=tgt_tokens.eq(self.pad))
         tgt_segment_mask = get_segment_mask(tgt_segment_ids)
         tgt_sent_lens = get_sent_lens(tgt_segment_mask)
@@ -326,11 +308,9 @@ class GroupDACRFTransformerModel(DACRFTransformerModel):
 
         tgt_tokens = pad_to_new_tensor(tgt_tokens, tgt_sent_lens, pad=self.pad)
 
-        emission_lprobs = F.log_softmax(emission_scores, dim=-1)
-        emission_lprobs = emission_lprobs.gather(2, tgt_tokens[:, None, :].expand(-1, prev_output_tokens.size(1), -1))
-
+        # normal loss calculation
         if not getattr(self.args, "crf_finetuning", False):  # compute dag loss
-            dag_loss = self.compute_dag_loss(
+            dag_loss = self._compute_dag_loss(
                 prev_output_tokens,
                 tgt_tokens,
                 emission_lprobs=emission_lprobs,
@@ -338,22 +318,12 @@ class GroupDACRFTransformerModel(DACRFTransformerModel):
             )
             ret = {"dag_loss": {"loss": dag_loss}}
         else:
-            prev_output_masks = prev_output_tokens.ne(self.pad)
-            target_masks = tgt_tokens.ne(self.pad)
-
-            _emission_scores = emission_scores.gather(
-                1,
-                best_alignment[:, :, None].expand(-1, -1, emission_scores.size(-1)),
+            dacrf_loss = self._compute_dacrf_loss(
+                prev_output_tokens,
+                tgt_tokens,
+                emission_lprobs=emission_lprobs,
+                transit_lprobs=transit_lprobs,
             )
-            numerator = self._compute_dacrf_numerator(_emission_scores, None, tgt_tokens, target_masks)
-            denominator = self._compute_dacrf_normalizer(_emission_scores, None, tgt_tokens, target_masks)
-
-            # if the below condition is not met, the best_alignment would contain errors.
-            valid_masks = prev_output_masks.sum(-1) >= target_masks.sum(-1)
-            dacrf_loss = -(numerator[valid_masks] - denominator[valid_masks])
-            dacrf_loss = dacrf_loss / target_masks[valid_masks].type_as(dacrf_loss).sum(-1)
-            dacrf_loss = dacrf_loss.masked_fill(dacrf_loss <= 0, 0)
-
             ret = {"dacrf_loss": {"loss": dacrf_loss}}
 
         # length prediction
@@ -417,7 +387,7 @@ class GroupDACRFTransformerModel(DACRFTransformerModel):
             decoder_out.output_tokens,
         )
 
-        if getattr(self.args, "crf_decoding", False) and self.args.decode_strategy not in ["full_crf", "beamsearch"]:
+        if getattr(self.args, "crf_finetuning", False) and not getattr(self.args, "crf_disabled", False):
             output_tokens = self._inference_crf(output_tokens, emission_lprobs, transit_lprobs, output_aligns)
 
         output_lengths = output_tokens.ne(self.pad).sum(-1)

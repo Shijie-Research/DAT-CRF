@@ -191,6 +191,7 @@ class NATransformerDecoder(FairseqNATDecoder):
         self.bos = dictionary.bos()
         self.unk = dictionary.unk()
         self.eos = dictionary.eos()
+        self.pad = dictionary.pad()
 
         self.encoder_embed_dim = args.encoder_embed_dim
         self.sg_length_pred = getattr(args, "sg_length_pred", False)

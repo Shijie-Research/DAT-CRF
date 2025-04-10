@@ -142,6 +142,10 @@ class TransformerSent(TransformerIWSLT14):
 
 @register_tasks("iwslt17_en_zh")
 class TransformerIWSLT17(TransformerIWSLT14):
+    def __init__(self, *, task, remaining_args, **kwargs):
+        remaining_args.append("--data-sep")
+        super().__init__(task=task, remaining_args=remaining_args, **kwargs)
+
     @property
     def train_configs(self):
         configs = super().train_configs
