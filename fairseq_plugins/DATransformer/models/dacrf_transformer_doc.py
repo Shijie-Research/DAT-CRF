@@ -129,13 +129,13 @@ class GroupDACRFTransformerModel(DACRFTransformerModel):
 
     def initialize_output_tokens(self, encoder_out, src_tokens, length_tgt=None):
         # length prediction
-        length_tgt = src_tokens.ne(self.pad).sum(-1) * self.args.upsample_scale
+        length_tgt = src_tokens.ne(self.pad).sum(-1) * int(self.args.upsample_scale)
         decoder_out = super().initialize_output_tokens(encoder_out, src_tokens, length_tgt=length_tgt)
         prev_output_tokens = decoder_out.output_tokens
 
         # scatter the bos and eos tokens into right positions
         src_segment_mask = get_segment_mask(encoder_out["segment_ids"][0])
-        src_lengs = (src_segment_mask.sum(-1) * self.args.upsample_scale).long().cumsum(-1)
+        src_lengs = (src_segment_mask.sum(-1) * int(self.args.upsample_scale)).long().cumsum(-1)
         bos_indices = src_lengs.masked_fill(src_lengs == src_lengs.max(-1, keepdim=True)[0], 0)
 
         prev_output_tokens = prev_output_tokens.scatter(1, bos_indices, self.bos)
@@ -337,7 +337,7 @@ class GroupDACRFTransformerModel(DACRFTransformerModel):
 
     def forward_decoder(self, decoder_out, encoder_out, src_tokens=None, decoding_format=None, **kwargs):
         upsample_target = getattr(self.args, "upsample_target", False)
-        if upsample_target and self.args.upsample_scale == 1:
+        if upsample_target and int(self.args.upsample_scale) == 1:
             return super().forward_decoder(
                 decoder_out,
                 encoder_out,
@@ -349,9 +349,9 @@ class GroupDACRFTransformerModel(DACRFTransformerModel):
         history = decoder_out.history
 
         if getattr(self.args, "upsample_target", False):
-            length_tgt = decoder_out.output_tokens.ne(self.pad).sum(1) * self.args.upsample_scale
+            length_tgt = decoder_out.output_tokens.ne(self.pad).sum(1) * int(self.args.upsample_scale)
         else:
-            length_tgt = src_tokens.ne(self.pad).sum(1) * self.args.upsample_scale
+            length_tgt = src_tokens.ne(self.pad).sum(1) * int(self.args.upsample_scale)
 
         output_tokens = self.initialize_output_tokens(encoder_out, src_tokens, length_tgt).output_tokens
 
@@ -368,13 +368,17 @@ class GroupDACRFTransformerModel(DACRFTransformerModel):
             inference_cls = self._inference_lookahead
         elif self.args.decode_strategy == "joint-viterbi":
             inference_cls = self._inference_joint_viterbi
+
         elif self.args.decode_strategy in ["single-viterbi"]:
             inference_cls = self._inference_single_viterbi
+
         elif self.args.decode_strategy in ["full-viterbi"]:
             inference_cls = self._inference_full_viterbi
+
         elif self.args.decode_strategy == "beamsearch":
             inference_cls = self._inference_beamsearch
-        elif self.args.decode_strategy == "full_crf":
+
+        elif self.args.decode_strategy == "full-crf":
             inference_cls = self._inference_full_crf
 
         else:

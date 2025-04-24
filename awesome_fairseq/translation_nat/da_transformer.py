@@ -302,7 +302,10 @@ class DACRFTransformerDoc(DACRFTransformerIWSLT14):
         super().__init__(task=task.split("-")[0], remaining_args=remaining_args, **kwargs)
 
     def _post_process_configs(self, grouped_configs):
-        CONFIGS.verbose_update({"--max-target-positions": str(512 * CONFIGS.typed_get("--upsample-scale", dtype=int))})
+        if self.run_type == "train":
+            CONFIGS.verbose_update(
+                {"--max-target-positions": str(512 * CONFIGS.typed_get("--upsample-scale", dtype=int))},
+            )
 
         # go to parent
         super()._post_process_configs(grouped_configs)

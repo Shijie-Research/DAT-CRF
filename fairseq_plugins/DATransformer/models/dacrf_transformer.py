@@ -986,6 +986,11 @@ class DACRFTransformerModel(NATransformerModel):
         output_tokens = beam_tokens[bsz_idx.expand(*best_beam.shape), best_traj, best_beam]
         output_lprobs = beam_lprobs[bsz_idx.expand(*best_beam.shape), best_traj, best_beam]
 
+        for i in range(output_tokens.size(0)):
+            eos_indices = (output_tokens[i] == self.eos).nonzero(as_tuple=True)[0]
+            if len(eos_indices) > 1:
+                output_tokens[i, eos_indices[1:]] = self.pad
+
         return output_tokens, output_lprobs, None
 
     def upgrade_state_dict_named(self, state_dict, name):
