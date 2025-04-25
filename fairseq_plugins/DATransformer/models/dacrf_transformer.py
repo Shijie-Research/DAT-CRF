@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
+from torch.nn.utils.rnn import pad_sequence
 
 from fairseq import utils
 from fairseq.models import register_model, register_model_architecture
@@ -111,7 +112,7 @@ class DACRFTransformerModel(NATransformerModel):
 
         self.register_buffer(
             "length_penalty",
-            torch.arange(self.decoder.max_positions()) ** args.decode_alpha,
+            args.decode_alpha * torch.arange(self.decoder.max_positions()).log(),
             persistent=False,
         )
 
@@ -924,9 +925,10 @@ class DACRFTransformerModel(NATransformerModel):
         E2 = self.crf_embed_key(beam_tokens)
         crf_scores = torch.einsum("bsmd,btnd->bstmn", E1, E2)
 
-        dag_lprobs = dag_lprobs[:, :, :, None, :] + crf_scores
+        dag_lprobs = dag_lprobs[:, :, :, None, :] + self.args.decode_beta * crf_scores
 
-        eos_idx = prev_output_mask.sum(-1) - 1
+        eos_idx = prev_output_mask.sum(-1, keepdim=True) - 1
+        bsz_idx = utils.new_arange(eos_idx, bsz)[:, None]
 
         traj_index = []
         beam_index = []
@@ -939,59 +941,43 @@ class DACRFTransformerModel(NATransformerModel):
             # compute the length penalized scores of sentences that end here
             traj_index.append(index_t)
             beam_index.append(index_b)
-            all_lprobs.append(cumulative_lprobs)
+            all_lprobs.append(cumulative_lprobs[:, :, 0])
 
-        all_lprobs = torch.stack(all_lprobs, dim=0)
-        eos_lprobs = all_lprobs.gather(2, eos_idx[None, :, None, None].expand(pre_len - 1, -1, -1, beam_size)).squeeze(
-            2,
-        )
-        eos_lprobs = eos_lprobs[:, :, 0]
+        all_lprobs = torch.stack(all_lprobs, dim=-1)
+        all_lprobs = all_lprobs[bsz_idx, eos_idx].squeeze()
+        all_lprobs = all_lprobs - self.length_penalty[2 : pre_len + 1][None, :]
 
-        eos_lprobs = eos_lprobs / self.length_penalty[2 : pre_len + 1].unsqueeze(1)
+        max_scores, pred_length = all_lprobs.max(dim=-1)
+        pred_length += 2
 
-        max_scores, length = eos_lprobs.max(dim=0)
-        length += 2
+        traj_index = torch.stack(traj_index)
+        beam_index = torch.stack(beam_index)
 
-        # max_length * batch
-        max_length = length.max()
-        traj_index = traj_index[: max_length - 1]
-        beam_index = beam_index[: max_length - 1]
+        unpad_output_tokens = []
+        unpad_output_scores = []
+        for i, length in enumerate(pred_length):
+            next_beam = 0
+            traj = eos_idx[i]
 
-        best_traj_idx = eos_idx.unsqueeze(-1)  # all sentences start from eos in a reversed way
-        best_traj_list = [best_traj_idx.clone()]
+            res_out = [beam_tokens[i, traj, next_beam]]
+            res_scr = [beam_lprobs[i, traj, next_beam]]
 
-        best_beam_idx = eos_idx.new_zeros(bsz, 1)
-        best_beam_list = [best_beam_idx.clone()]
+            for k in reversed(range(1, length)):
+                prev_beam = beam_index[k - 1, i, traj, next_beam]
+                traj = traj_index[k - 1, i, traj, prev_beam, next_beam]
 
-        mask = utils.new_arange(prev_output_tokens, max_length).unsqueeze(0).expand(bsz, -1) < length.unsqueeze(-1)
-        bsz_idx = torch.arange(bsz).unsqueeze(-1)
+                res_out.insert(0, beam_tokens[i, traj, prev_beam])
+                res_scr.insert(0, beam_lprobs[i, traj, prev_beam])
 
-        for i, (traj, beam) in enumerate(zip(reversed(traj_index), reversed(beam_index))):
-            update_mask = mask[:, [-1 - i]]
-            # first get the best
-            beam_idx = beam[bsz_idx, best_traj_list[0], best_beam_list[0]]
-            traj_idx = traj[bsz_idx, best_traj_list[0], beam_idx, best_beam_list[0]]
+                next_beam = prev_beam
 
-            # only update sentences that are longer or equal than current length
-            best_traj_idx[update_mask] = traj_idx[update_mask]
-            best_traj_list.insert(0, best_traj_idx.clone())
+            unpad_output_tokens.append(torch.cat(res_out))
+            unpad_output_scores.append(torch.cat(res_scr))
 
-            best_beam_idx[update_mask] = beam_idx[update_mask]
-            best_beam_list.insert(0, best_beam_idx.clone())
+        output_tokens = pad_sequence(unpad_output_tokens, batch_first=True, padding_value=self.pad)
+        output_scores = pad_sequence(unpad_output_scores, batch_first=True, padding_value=0)
 
-        best_traj = torch.cat(best_traj_list, 1)
-        best_beam = torch.cat(best_beam_list, 1)
-
-        # first gather all beams in the selected path
-        output_tokens = beam_tokens[bsz_idx.expand(*best_beam.shape), best_traj, best_beam]
-        output_lprobs = beam_lprobs[bsz_idx.expand(*best_beam.shape), best_traj, best_beam]
-
-        for i in range(output_tokens.size(0)):
-            eos_indices = (output_tokens[i] == self.eos).nonzero(as_tuple=True)[0]
-            if len(eos_indices) > 1:
-                output_tokens[i, eos_indices[1:]] = self.pad
-
-        return output_tokens, output_lprobs, None
+        return output_tokens, output_scores, None
 
     def upgrade_state_dict_named(self, state_dict, name):
         super().upgrade_state_dict_named(state_dict, name)
