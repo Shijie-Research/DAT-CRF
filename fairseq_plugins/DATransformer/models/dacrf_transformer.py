@@ -571,7 +571,7 @@ class DACRFTransformerModel(NATransformerModel):
 
     def forward_decoder(self, decoder_out, encoder_out, src_tokens=None, decoding_format=None, **kwargs):
         upsample_target = getattr(self.args, "upsample_target", False)
-        if upsample_target and int(self.args.upsample_scale) == 1:
+        if upsample_target and int(self.args.upsample_scale) == 1 and getattr(self.args, "crf_disabled", False):
             return super().forward_decoder(
                 decoder_out,
                 encoder_out,
