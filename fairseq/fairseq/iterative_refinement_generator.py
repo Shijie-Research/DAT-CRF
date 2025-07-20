@@ -15,6 +15,10 @@ DecoderOut = namedtuple(
     ["output_tokens", "output_scores", "attn", "step", "max_step", "history"],
 )
 
+import logging
+
+logger = logging.getLogger(__file__)
+
 
 class IterativeRefinementGenerator(object):
     def __init__(
@@ -60,6 +64,7 @@ class IterativeRefinementGenerator(object):
         self.adaptive = adaptive
         self.models = models
         self.length_format = length_format
+        self.repetition_rate = [0, 0]
 
     def generate_batched_itr(
         self,
@@ -197,6 +202,13 @@ class IterativeRefinementGenerator(object):
             )
 
             decoder_out = model.forward_decoder(prev_decoder_out, encoder_out, **decoder_options)
+
+            for tokens in decoder_out.output_tokens:
+                self.repetition_rate[1] += tokens.ne(self.pad).sum().item()
+                tokens = torch.unique_consecutive(tokens)
+                self.repetition_rate[0] += tokens.ne(self.pad).sum().item()
+
+            logger.info(f"{(self.repetition_rate[1] - self.repetition_rate[0]) / self.repetition_rate[1]:.2%}")
 
             if self.adaptive:
                 # terminate if there is a loop
